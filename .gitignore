@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Build output
+dist/
+build/
+.next/
+coverage/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# Databases (local)
+*.sqlite
+*.db
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Claude Code local state
+.claude/
+
+# Unrelated files in this folder (LS-DYNA pipeline tool)
+lsdynpg.py
+lsdynpg_spec.md
