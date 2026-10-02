@@ -32,7 +32,3 @@ Thumbs.db
 
 # Claude Code local state
 .claude/
-
-# Unrelated files in this folder (LS-DYNA pipeline tool)
-lsdynpg.py
-lsdynpg_spec.md
