@@ -40,6 +40,7 @@
 | 401 | UNAUTHORIZED | Missing/expired/invalid session cookie |
 | 401 | INVALID_CREDENTIALS | Wrong username or password on login |
 | 404 | NOT_FOUND | Resource doesn't exist or belongs to another user |
+| 405 | METHOD_NOT_ALLOWED | HTTP method not supported on this path |
 | 409 | USERNAME_TAKEN | Signup with an existing username (case-insensitive) |
 | 409 | TRIP_FINALIZED | Change attempted on a finalized trip (reopen first) |
 | 409 | TRIP_NOT_FINALIZED | Export or reopen on a draft trip |
@@ -47,6 +48,7 @@
 | 409 | DRAFT_NAME_TAKEN | Draft name already used in this trip |
 | 409 | LAST_DRAFT | Deleting the only draft of a trip |
 | 409 | DRAFT_LIMIT_REACHED | Creating more than 5 drafts in a trip |
+| 413 | PAYLOAD_TOO_LARGE | Request body larger than 100 KB |
 | 429 | RATE_LIMITED | More than 10 signup/login/delete-account attempts per minute from one IP |
 | 500 | INTERNAL_ERROR | Unexpected server error (no internal details exposed) |
 
@@ -522,3 +524,4 @@ The Compare Drafts page calls this twice (one per draft); there is no separate c
 | 2026-10-03 | Initial contract: auth, trips, drafts, activities, finalize/reopen, PDF export | Priyanka Ghate (with Claude) |
 | 2026-10-03 | `/health` returns `503 degraded` when the database is unreachable (from backend spec) | Priyanka Ghate (with Claude) |
 | 2026-10-03 | Added `DELETE /auth/me` (delete account, MVP); rate limit also covers it | Priyanka Ghate (with Claude) |
+| 2026-10-03 | Added error codes `METHOD_NOT_ALLOWED` (405) and `PAYLOAD_TOO_LARGE` (413) (Phase 1) | Priyanka Ghate (with Claude) |
