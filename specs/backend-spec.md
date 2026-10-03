@@ -126,7 +126,7 @@ Rows older than 1 hour are deleted opportunistically on each auth request.
 - **Auth mechanism:** On signup/login the server signs a JWT (`sub` = user ID, `exp` = 7 days) with `JWT_SECRET` and sets it as cookie `gy_session`: `HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=604800`. Logout and account deletion clear the cookie. No refresh tokens in MVP — users log in again after 7 days.
 - **Roles / permissions:** One role (traveller). No admin features in MVP.
 - **Resource ownership rules:** Every trip, draft and activity query is scoped to the logged-in user through the ownership helpers; other users' data returns `404 NOT_FOUND`.
-- **Password rules:** 8–128 characters; stored only as a bcrypt hash; never logged.
+- **Password rules:** 8–128 characters; stored only as a bcrypt hash; never logged. Passwords are pre-hashed with SHA-256 (base64) before bcrypt, because bcrypt ignores everything after 72 bytes and a 128-character password can be longer than that.
 - **Account deletion:** Permanent and immediate; requires the current password. No soft-delete or recovery in MVP.
 
 ## 6. Validation & Error Handling
