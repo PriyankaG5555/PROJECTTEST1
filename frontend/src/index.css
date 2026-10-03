@@ -1,0 +1,26 @@
+@import 'tailwindcss';
+
+/* Brand tokens — frontend-spec.md §8 */
+@theme {
+  --color-brand-50: #f0f9ff;
+  --color-brand-200: #bae6fd;
+  --color-brand-400: #38bdf8;
+  --color-brand-500: #0ea5e9;
+  --color-brand-700: #0369a1;
+  --color-brand-900: #0c4a6e;
+  --color-accent: #fb923c;
+
+  --font-display: 'Poppins', 'Segoe UI', system-ui, sans-serif;
+  --font-sans: 'Inter', 'Segoe UI', system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-brand-50 font-sans text-brand-900 antialiased;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-display;
+  }
+}

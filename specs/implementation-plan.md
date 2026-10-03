@@ -8,7 +8,7 @@
 - **One phase = one git branch** (e.g. `phase-2-auth`), merged into `main` when the phase's "Done when" checks pass. Commit after each task.
 - **Spec first:** if a task shows a spec is wrong or incomplete, update the spec (and the contract's Change Log) **before** changing code.
 - **Tests with code:** every backend endpoint gets pytest tests for its success case and every error code listed in the contract.
-- **Definition of done (every task):** code + tests pass locally and in CI, `ruff`/`mypy` (backend) or `eslint`/`tsc` (frontend) clean, no secrets committed.
+- **Definition of done (every task):** code + tests pass locally and in CI, `ruff`/`mypy` (backend) or `oxlint`/`tsc` (frontend) clean, no secrets committed.
 
 ## Timeline overview
 | Day | Phase | Priority |
@@ -32,10 +32,10 @@
 | # | Task | Spec | Done when |
 |---|------|------|-----------|
 | 0.1 | Create repo layout: `backend/`, `frontend/`, `api/index.py`, root `requirements.txt`, `vercel.json` | BE §10, §11 | Folders exist and match the spec |
-| 0.2 | Backend skeleton: `pyproject.toml` (FastAPI, SQLAlchemy, Alembic, psycopg, Pydantic, pydantic-settings, bcrypt, PyJWT, ReportLab, svglib, pytest, ruff, mypy), `app/main.py` with `GET /api/v1/health`, `config.py`, `.env.example` | BE §1, §8; API `/health` | `uvicorn app.main:app --port 8000` → `/api/v1/health` returns `{"status":"ok"}` |
+| 0.2 | Backend skeleton: `pyproject.toml` + `requirements*.txt` (FastAPI, SQLAlchemy, Alembic, psycopg, Pydantic, pydantic-settings, bcrypt, PyJWT, ReportLab, svglib, pytest, ruff, mypy), `app/main.py` with `GET /api/v1/health`, `config.py`, `.env.example` | BE §1, §8; API `/health` | `uvicorn app.main:app --port 8000` → `/api/v1/health` returns `{"status":"ok"}` |
 | 0.3 | Local PostgreSQL: `docker-compose.yml` with `db` (dev) and a test database | BE §11 | `docker compose up db` works; app connects |
 | 0.4 | Frontend skeleton: Vite + React + TypeScript + Tailwind, React Router, TanStack Query, brand tokens (light-blue palette), Poppins + Inter fonts, logo + favicon in `public/`, Vite proxy `/api` → `:8000` | FE §1, §8, §11, §12 | `npm run dev` shows a placeholder page with logo and brand colours; `/api/v1/health` works through the proxy |
-| 0.5 | CI: GitHub Actions — backend (`ruff`, `mypy`, `pytest` with Postgres service) and frontend (`eslint`, `tsc`, `vitest`) | BE §11 | CI passes on `main` |
+| 0.5 | CI: GitHub Actions — backend (`ruff`, `mypy`, `pytest` with Postgres service) and frontend (`oxlint`, `tsc`, `vitest`, build) | BE §11 | CI passes on `main` |
 
 ## Phase 1 — Backend foundation (Day 1–2)
 | # | Task | Spec | Done when |

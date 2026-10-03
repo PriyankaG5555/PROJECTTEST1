@@ -3,7 +3,7 @@
 > Purpose: Define server-side architecture, data model, and business logic. Must implement every endpoint in `api-contract-spec.md` and support the goals in `goal-spec.md`.
 
 ## 1. Tech Stack
-- **Language / runtime:** Python 3.12
+- **Language / runtime:** Python 3.12 on Vercel (code must also run on newer versions, e.g. 3.14 used locally)
 - **Framework:** FastAPI (ASGI) — deployed as a Vercel Python serverless function; Uvicorn for local development
 - **Database:** PostgreSQL 16 (Neon, free plan)
 - **ORM / data access:** SQLAlchemy 2.0 (sync) + psycopg 3; **Alembic** for migrations
@@ -13,7 +13,7 @@
 - **Rate limiting:** Stored in PostgreSQL (`auth_attempts` table) — in-memory limiters don't work on serverless, where each request may hit a different instance.
 - **Logging:** Python `logging` with a JSON formatter (`python-json-logger`)
 - **External services / APIs:** None in MVP (no paid third-party APIs).
-- **Testing:** pytest + FastAPI `TestClient` (httpx) against a separate test PostgreSQL database; `ruff` (lint/format) and `mypy` (type-check)
+- **Testing:** pytest + FastAPI `TestClient` (`httpx2`) against a separate test PostgreSQL database; `ruff` (lint/format) and `mypy` (type-check)
 
 ## 2. Architecture Overview
 Layered, one module per resource:
@@ -167,12 +167,16 @@ Settings are loaded and validated with `pydantic-settings`. `backend/.env.exampl
 ```
 PROJECTTEST1/
   vercel.json             # build frontend + route /api/* to the Python function
-  requirements.txt        # backend dependencies (read by Vercel's Python runtime)
+  requirements.txt        # `-r backend/requirements.txt` (read by Vercel's Python runtime)
+  docker-compose.yml      # local dev + test PostgreSQL
+  .github/workflows/ci.yml
   api/
     index.py              # Vercel entry point: `from app.main import app`
   frontend/               # see frontend-spec.md
   backend/
     pyproject.toml        # project metadata, ruff/mypy/pytest config
+    requirements.txt      # runtime dependencies (single source of truth)
+    requirements-dev.txt  # + uvicorn, alembic, pytest, httpx2, ruff, mypy
     .env.example
     alembic.ini
     alembic/
@@ -232,7 +236,7 @@ Browser ─HTTPS─▶│ ghumakkadyatri.vercel.app                             
   - **Database:** Neon PostgreSQL free plan (0.5 GB storage — far more than MVP needs).
 - **Free-plan limits to be aware of:** Vercel Hobby is for **personal, non-commercial** use; function duration limit applies (PDF generation stays well under it). If the app becomes commercial, move to Vercel Pro or another host — the code doesn't change.
 - **Migrations:** A GitHub Actions job runs `alembic upgrade head` against the production database (using the `DATABASE_URL` repository secret) on every push to `main`, before Vercel finishes deploying. Migrations must be backward-compatible (add columns before using them).
-- **Local development:** PostgreSQL via `docker compose up db` (or a Neon dev branch); `uvicorn app.main:app --reload --port 8000` in `backend/`; Vite dev server proxies `/api` to it.
+- **Local development:** PostgreSQL on **Neon branches** (decided: no Docker needed) — a `dev` branch for `backend/.env` and a `test` branch for `pytest` (`TEST_DATABASE_URL`); production uses Neon's `main` branch. `docker-compose.yml` remains as an optional alternative. `uvicorn app.main:app --reload --port 8000` in `backend/`; Vite dev server proxies `/api` to it.
 - **CI:** GitHub Actions on every push and pull request: `ruff`, `mypy`, `pytest` (with a PostgreSQL service container), and frontend lint + tests.
 - **Before first deploy:** re-check current Vercel and Neon free-plan terms, as providers change them.
 

@@ -32,3 +32,12 @@ Thumbs.db
 
 # Claude Code local state
 .claude/
+
+# Python tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# Vercel local state
+.vercel/
