@@ -169,7 +169,7 @@ Settings are loaded and validated with `pydantic-settings`. `backend/.env.exampl
 ```
 PROJECTTEST1/
   vercel.json             # build frontend + route /api/* to the Python function
-  requirements.txt        # `-r backend/requirements.txt` (read by Vercel's Python runtime)
+  requirements.txt        # runtime dependencies (single source of truth; read by Vercel)
   docker-compose.yml      # local dev + test PostgreSQL
   .github/workflows/ci.yml
   api/
@@ -177,7 +177,7 @@ PROJECTTEST1/
   frontend/               # see frontend-spec.md
   backend/
     pyproject.toml        # project metadata, ruff/mypy/pytest config
-    requirements.txt      # runtime dependencies (single source of truth)
+    requirements.txt      # `-r ../requirements.txt`
     requirements-dev.txt  # + uvicorn, alembic, pytest, httpx2, ruff, mypy
     .env.example
     alembic.ini

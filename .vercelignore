@@ -1,0 +1,14 @@
+# Never upload secrets or local build/test folders to Vercel.
+**/.env
+**/.env.*
+!**/.env.example
+**/.venv
+**/node_modules
+**/__pycache__
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+frontend/dist
+frontend/test-results
+frontend/playwright-report
+specs

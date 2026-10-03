@@ -41,3 +41,5 @@ Thumbs.db
 
 # Vercel local state
 .vercel/
+.vercel
+.env*
