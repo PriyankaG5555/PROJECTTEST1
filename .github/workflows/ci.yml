@@ -56,3 +56,29 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+
+  # Phase 6: apply database migrations to production (Neon) after tests pass on main.
+  # Needs repository secret MIGRATION_DATABASE_URL (Neon direct URL, main branch).
+  migrate:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+      DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+      JWT_SECRET: migration-only-not-used-for-sessions-000
+    steps:
+      - uses: actions/checkout@v4
+      - name: Skip when the secret is not configured yet
+        id: check
+        run: |
+          if [ -z "$MIGRATION_DATABASE_URL" ]; then echo "No MIGRATION_DATABASE_URL secret; skipping."; echo "run=false" >> "$GITHUB_OUTPUT"; else echo "run=true" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/setup-python@v5
+        if: steps.check.outputs.run == 'true'
+        with:
+          python-version: "3.12"
+      - if: steps.check.outputs.run == 'true'
+        run: pip install -r requirements-dev.txt && alembic upgrade head

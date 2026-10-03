@@ -2,7 +2,8 @@
 
 from fastapi import APIRouter, Response, status
 
-from app.models import TripStatus
+from app.errors import AppError
+from app.models import Draft, TripStatus
 from app.schemas.drafts import FinalizeIn
 from app.schemas.trips import (
     TripCreateIn,
@@ -12,8 +13,9 @@ from app.schemas.trips import (
     TripUpdateResponse,
 )
 from app.security import CurrentUser, DbSession
-from app.services import trip_service
+from app.services import draft_service, trip_service
 from app.services.ownership import get_owned_trip
+from app.services.pdf_service import build_itinerary_pdf, pdf_filename
 
 router = APIRouter(prefix="/trips", tags=["trips"])
 
@@ -57,6 +59,24 @@ def finalize_trip(trip_id: str, body: FinalizeIn, user: CurrentUser, db: DbSessi
 def reopen_trip(trip_id: str, user: CurrentUser, db: DbSession) -> TripResponse:
     trip = trip_service.reopen_trip(db, user, trip_id)
     return TripResponse(trip=trip_service.trip_detail(db, trip))
+
+
+@router.get("/{trip_id}/export.pdf", response_class=Response)
+def export_pdf(trip_id: str, user: CurrentUser, db: DbSession) -> Response:
+    trip = get_owned_trip(db, trip_id, user)
+    if trip.status is not TripStatus.FINALIZED or trip.finalized_draft_id is None:
+        raise AppError("TRIP_NOT_FINALIZED", 409, "Finalize this trip before exporting it.")
+    draft = db.get(Draft, trip.finalized_draft_id)
+    assert draft is not None  # finalized trips are locked, so the draft can't be deleted
+    pdf = build_itinerary_pdf(
+        trip_service.trip_detail(db, trip), draft_service.draft_out(db, draft)
+    )
+    filename = pdf_filename(trip.destination, trip.start_date.isoformat())
+    return Response(
+        pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.delete("/{trip_id}", status_code=status.HTTP_204_NO_CONTENT)
