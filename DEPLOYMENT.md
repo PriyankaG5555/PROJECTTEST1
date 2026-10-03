@@ -41,4 +41,4 @@ Expect every line to say `PASS`. Order matters: push to `main` (runs migrations)
 
 ## Notes
 - Vercel Hobby is for personal, non-commercial use. Re-check Vercel/Neon free-plan terms before launch.
-- Fonts: put `Poppins-Bold.ttf` and `Inter-Regular.ttf` (Google Fonts, OFL licence) in `backend/assets/fonts/` to show `₹` in PDFs; without them the PDF uses Helvetica and `Rs.`.
+- Fonts: `backend/assets/fonts/` holds Poppins-Bold and Inter (Google Fonts, SIL Open Font License — licence files included), so PDFs show `₹`. If they are missing, PDFs fall back to Helvetica and `Rs.`.
