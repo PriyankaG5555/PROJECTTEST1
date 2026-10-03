@@ -46,12 +46,13 @@
 | US-8b | As a traveller, I want to compare two drafts of a trip side by side (day-by-day activities and total cost) so that I can pick the better plan to finalize. | P2 | G1 |
 | US-9 | As a traveller, I want to export a Finalized trip's itinerary as a PDF so that I can print it, share it, or view it offline. | P0 | G3 |
 | US-9a | As a traveller, I want to reopen a Finalized trip for editing so that I can change my plan when things change, then finalize and export it again. | P0 | G1, G3 |
+| US-13 | As a traveller, I want to permanently delete my account and all my trips so that my personal data is not kept when I stop using the app. | P0 | G2 |
 | US-10 | As a traveller, I want to edit a trip's details (destination, dates, type) so that I can fix mistakes or adjust plans. | P1 | G1 |
 | US-11 | As a traveller, I want to delete a trip I no longer need so that my trip list stays clean. | P1 | G1 |
 | US-12 | As a traveller on my phone, I want the app to work well on a mobile browser so that I can check my plan while travelling. | P1 | G2 |
 
 ## 6. Key Features (MVP)
-- [ ] **F1 — Authentication:** Users can sign up (username + password), log in, and log out through login/signup screens. *(US-1, US-2, US-3)*
+- [ ] **F1 — Authentication:** Users can sign up (username + password), log in, and log out through login/signup screens. Users can also permanently delete their account (password required), which deletes all their trips. *(US-1, US-2, US-3, US-13)*
 - [ ] **F2 — Create trip:** Users can create a trip with destination, start date, end date, and trip type (solo, couple, family, friends). *(US-4)*
 - [ ] **F3 — Trip list:** Users can view a list of the trips they have created, showing each trip's status (Draft / Finalized). *(US-5)*
 - [ ] **F4 — Day-by-day planner:** Users can open a trip and add, edit, or remove activities for each day from Day 1 to Day N (N derived from start/end dates). Each activity has:
@@ -101,7 +102,7 @@
   - Trips are between 1 and 30 days long.
 
 ## 10. Risks & Open Questions
-- [ ] **Data privacy:** User login data must be protected (hashed passwords, HTTPS, no plain-text secrets). What else is required, e.g. account deletion, data retention?
+- [x] **Data privacy:** **Resolved:** hashed passwords, HTTPS, secure httpOnly cookie, no plain-text secrets, and "Delete my account" in MVP (US-13). Data is kept until the user deletes it.
 - [ ] **Off-topic use:** If an AI assistant is added later, how do we keep users from asking non-travel questions? *(Not applicable to MVP, which has no chat.)*
 - [x] **"Finalized" trips:** **Resolved:** trips are Draft while planning; only Finalized trips can be exported to PDF.
   - [x] Follow-up: **Resolved:** Finalized trips are read-only; "Reopen for editing" moves them back to Draft.

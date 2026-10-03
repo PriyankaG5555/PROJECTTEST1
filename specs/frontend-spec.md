@@ -23,6 +23,7 @@
 | `/trips/new` | New Trip | Form: destination, start date, end date, trip type | Yes | US-4 |
 | `/trips/:tripId` | Trip Planner | Day-by-day planner for the selected draft; finalize / reopen / export actions; draft switcher | Yes | US-6, US-7, US-7a, US-8, US-8a, US-9, US-9a |
 | `/trips/:tripId/edit` | Edit Trip | Edit trip details (destination, dates, type) | Yes | US-10 |
+| `/account` | My Account | Shows username; **Delete my account** (danger zone) | Yes | US-13 |
 | `/trips/:tripId/compare` | Compare Drafts | Pick two drafts; side-by-side view (P2) | Yes | US-8b |
 | `*` | Not Found | 404 page with link to My Trips | No | — |
 
@@ -61,10 +62,16 @@
 2. If the new dates shorten the trip and days with activities would be removed, a warning lists the affected days and activities (in every draft). On confirmation those activities are **deleted**; on cancel nothing changes.
 3. **Delete trip** → confirmation dialog → trip removed → back to `/trips`.
 
+### Flow 7: Delete my account
+1. User opens the header menu → **My account** → `/account`.
+2. User clicks **Delete my account** → dialog explains that all trips will be permanently deleted and asks for the password.
+3. On confirm → account deleted, cache cleared, user sent to `/signup` with the message "Your account has been deleted."
+4. Wrong password → inline error; nothing is deleted.
+
 ## 4. Components
 | Component | Responsibility | Props / Inputs | Used in |
 |-----------|----------------|----------------|---------|
-| `AppLayout` | Header (app name, username, Log out), main content area | `children` | All authenticated pages |
+| `AppLayout` | Header (logo, username menu with My account and Log out), main content area | `children` | All authenticated pages |
 | `ProtectedRoute` | Redirects to `/login` if no session | `children` | Authenticated routes |
 | `AuthForm` | Username/password form for login and signup | `mode: "login" \| "signup"`, `onSubmit` | Login, Sign Up |
 | `TripCard` | Shows destination, dates, trip type, status badge, actions | `trip` | My Trips |
@@ -156,6 +163,7 @@ interface Activity {
 | Log in | `POST /auth/login` | Button spinner; "Invalid username or password" |
 | Log out | `POST /auth/logout` | Clear query cache, go to `/login` |
 | Load current user | `GET /auth/me` | On 401 → redirect to `/login` |
+| Delete account | `DELETE /auth/me` | Confirm dialog with password; wrong password → inline error; success → clear cache, go to `/signup` |
 | List trips | `GET /trips` | Skeleton cards; EmptyState "No trips yet"; ErrorState with retry |
 | Create trip | `POST /trips` | Button spinner; field errors inline |
 | Get trip | `GET /trips/:tripId` | Page spinner; 404 → Not Found |
@@ -178,6 +186,7 @@ Global rules:
 |------|--------|------------------|
 | Sign Up | username, password, confirm password | Username 3–30 chars, letters/numbers/underscore; password ≥ 8 chars; confirm must match |
 | Log In | username, password | Both required |
+| Delete account | password | Required |
 | Trip (create/edit) | destination, startDate, endDate, tripType | Destination required, ≤ 100 chars; dates required; endDate ≥ startDate; trip length 1–30 days; tripType one of solo/couple/family/friends |
 | Activity | destinationName, time, cost, priority | destinationName required, ≤ 100 chars; time optional, valid `HH:mm`; cost optional, number ≥ 0 with up to 2 decimals; priority optional, high/medium/low |
 | Draft | name | Required, ≤ 50 chars, unique within the trip |
@@ -245,6 +254,7 @@ frontend/
       EditTripPage.tsx
       PlannerPage.tsx
       CompareDraftsPage.tsx
+      AccountPage.tsx
       NotFoundPage.tsx
     types/
       index.ts            # shared types (Section 5)
@@ -255,7 +265,13 @@ frontend/
     e2e/                  # Playwright tests for P0 flows
 ```
 
-## 12. Open Questions
+## 12. Deployment
+- **Hosting:** Vercel (free Hobby plan) — the **same Vercel project** serves the React app and the Python API (`/api/*` → serverless function; see `backend-spec.md` §11). Auto-deploys from `main`; preview URL for every branch/PR.
+- **API access:** same domain for app and API, so the `gy_session` cookie works with no CORS or proxy setup.
+- **API base URL:** the frontend always calls the relative path `/api/v1` — no environment-specific URLs in code.
+- **Local development:** `vite.config.ts` proxies `/api` → `http://localhost:8000` (FastAPI via Uvicorn).
+
+## 13. Open Questions
 - [x] **PDF generation:** **Resolved:** the backend generates the PDF; the frontend only downloads it.
 - [x] **Finalized draft:** **Resolved:** other drafts are kept, read-only.
 - [x] **Changing dates:** **Resolved:** activities on removed days are deleted after a warning.

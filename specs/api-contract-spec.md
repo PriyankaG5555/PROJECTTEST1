@@ -47,7 +47,7 @@
 | 409 | DRAFT_NAME_TAKEN | Draft name already used in this trip |
 | 409 | LAST_DRAFT | Deleting the only draft of a trip |
 | 409 | DRAFT_LIMIT_REACHED | Creating more than 5 drafts in a trip |
-| 429 | RATE_LIMITED | More than 10 signup/login attempts per minute from one IP |
+| 429 | RATE_LIMITED | More than 10 signup/login/delete-account attempts per minute from one IP |
 | 500 | INTERNAL_ERROR | Unexpected server error (no internal details exposed) |
 
 ## 3. Shared Schemas
@@ -155,6 +155,7 @@ Activities in each day are sorted by `time` ascending; activities with `time: nu
 | POST | `/auth/login` | Log in | No |
 | POST | `/auth/logout` | Log out (clear cookie) | No |
 | GET | `/auth/me` | Current user | Yes |
+| DELETE | `/auth/me` | Delete my account and all my data | Yes |
 | GET | `/trips` | List my trips | Yes |
 | POST | `/trips` | Create trip (with "Draft 1") | Yes |
 | GET | `/trips/{tripId}` | Get trip with draft summaries | Yes |
@@ -177,6 +178,7 @@ Activities in each day are sorted by `time` ascending; activities with `time: nu
 ### `GET /health`
 - **Auth required:** No
 - **Success — `200`:** `{ "status": "ok" }`
+- **Database unreachable — `503`:** `{ "status": "degraded" }`
 
 ---
 
@@ -236,6 +238,27 @@ Rules: `username` 3–30 chars, letters/numbers/underscore, unique (case-insensi
 - **Auth required:** Yes
 - **Success — `200`:** `{ "user": User }`
 - **Errors:** `401 UNAUTHORIZED`
+
+---
+
+### `DELETE /auth/me`
+- **Description:** Permanently deletes the current user's account and **all** their trips, drafts and activities, then clears the session cookie. Cannot be undone.
+- **Auth required:** Yes
+
+**Request body**
+```json
+{ "password": "s3cure-pass" }
+```
+
+**Success response — `204`** (+ `Set-Cookie` clears `gy_session`). No body.
+
+**Error responses**
+| Status | Code | Condition |
+|--------|------|-----------|
+| 400 | VALIDATION_ERROR | Missing password |
+| 401 | UNAUTHORIZED | Not logged in |
+| 401 | INVALID_CREDENTIALS | Password is wrong |
+| 429 | RATE_LIMITED | Too many attempts |
 
 ---
 
@@ -497,3 +520,5 @@ The Compare Drafts page calls this twice (one per draft); there is no separate c
 | Date | Change | Author |
 |------|--------|--------|
 | 2026-10-03 | Initial contract: auth, trips, drafts, activities, finalize/reopen, PDF export | Priyanka Ghate (with Claude) |
+| 2026-10-03 | `/health` returns `503 degraded` when the database is unreachable (from backend spec) | Priyanka Ghate (with Claude) |
+| 2026-10-03 | Added `DELETE /auth/me` (delete account, MVP); rate limit also covers it | Priyanka Ghate (with Claude) |
