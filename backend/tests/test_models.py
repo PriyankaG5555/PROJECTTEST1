@@ -35,8 +35,7 @@ def make_trip(db: Session, user: User) -> Trip:
 
 
 def test_migration_matches_models(db: Session) -> None:
-    with db.connection() as conn:
-        diff = compare_metadata(MigrationContext.configure(conn), Base.metadata)
+    diff = compare_metadata(MigrationContext.configure(db.connection()), Base.metadata)
     assert diff == []
 
 
