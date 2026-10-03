@@ -49,7 +49,8 @@
 | 409 | LAST_DRAFT | Deleting the only draft of a trip |
 | 409 | DRAFT_LIMIT_REACHED | Creating more than 5 drafts in a trip |
 | 413 | PAYLOAD_TOO_LARGE | Request body larger than 100 KB |
-| 429 | RATE_LIMITED | More than 10 signup/login/delete-account attempts per minute from one IP |
+| 429 | RATE_LIMITED | More than 10 signup/login/delete-account attempts per minute from one IP, or more than 30 suggestion requests per user per day |
+| 503 | SUGGESTIONS_UNAVAILABLE | Google Places is not configured or did not respond |
 | 500 | INTERNAL_ERROR | Unexpected server error (no internal details exposed) |
 
 ## 3. Shared Schemas
@@ -71,6 +72,8 @@
   "startDate": "2026-11-14",
   "endDate": "2026-11-17",
   "tripType": "friends",
+  "topPriority": "budget",
+  "budget": 10000,
   "status": "draft",
   "finalizedDraftId": null,
   "dayCount": 4,
@@ -84,6 +87,8 @@
 | destination | string | Required, 1–100 chars, trimmed |
 | startDate, endDate | date | Required; `endDate ≥ startDate`; trip length (`dayCount`) 1–30 days |
 | tripType | enum | `solo` \| `couple` \| `family` \| `friends` |
+| topPriority | enum \| null | Optional; `time` \| `destinations` \| `budget`; `null` = not set |
+| budget | number \| null | Optional; total trip budget in INR, ≥ 0, ≤ 10,000,000, rounded to 2 decimals |
 | status | enum | `draft` \| `finalized` (read-only; changed only via finalize/reopen) |
 | finalizedDraftId | uuid \| null | Set when finalized; `null` when draft |
 | dayCount | integer | Read-only; `endDate − startDate + 1` |
@@ -126,9 +131,9 @@ Full draft with Day 1 … Day N (always exactly `trip.dayCount` days, including 
       "date": "2026-11-14",
       "totalCost": 2300,
       "activities": [
-        { "id": "a1...", "dayNumber": 1, "destinationName": "Baga Beach", "time": "09:30", "cost": 0, "priority": "high" },
-        { "id": "a2...", "dayNumber": 1, "destinationName": "Fort Aguada", "time": "15:00", "cost": 300, "priority": "medium" },
-        { "id": "a3...", "dayNumber": 1, "destinationName": "Seafood dinner", "time": null, "cost": 2000, "priority": null }
+        { "id": "a1...", "dayNumber": 1, "destinationName": "Baga Beach", "time": "09:30", "cost": 0 },
+        { "id": "a2...", "dayNumber": 1, "destinationName": "Fort Aguada", "time": "15:00", "cost": 300 },
+        { "id": "a3...", "dayNumber": 1, "destinationName": "Seafood dinner", "time": null, "cost": 2000 }
       ]
     },
     { "dayNumber": 2, "date": "2026-11-15", "totalCost": 0, "activities": [] }
@@ -147,7 +152,6 @@ Activities in each day are sorted by `time` ascending; activities with `time: nu
 | destinationName | string | Required, 1–100 chars, trimmed |
 | time | string \| null | Optional; `HH:mm` 24-hour |
 | cost | number \| null | Optional; ≥ 0, ≤ 10,000,000; rounded to 2 decimals by the server (half up) |
-| priority | enum \| null | Optional; `high` \| `medium` \| `low` |
 
 ## 4. Endpoints Summary
 | Method | Path | Description | Auth |
@@ -166,6 +170,7 @@ Activities in each day are sorted by `time` ascending; activities with `time: nu
 | POST | `/trips/{tripId}/finalize` | Finalize trip from a draft | Yes |
 | POST | `/trips/{tripId}/reopen` | Move finalized trip back to draft | Yes |
 | GET | `/trips/{tripId}/export.pdf` | Download itinerary PDF (finalized only) | Yes |
+| GET | `/trips/{tripId}/suggestions` | Activity suggestions for the destination (Google Places) | Yes |
 | GET | `/trips/{tripId}/drafts` | List draft summaries | Yes |
 | POST | `/trips/{tripId}/drafts` | Create draft (blank or copy) | Yes |
 | GET | `/drafts/{draftId}` | Get full draft with days and activities | Yes |
@@ -284,7 +289,10 @@ Rules: `username` 3–30 chars, letters/numbers/underscore, unique (case-insensi
 
 **Request body**
 ```json
-{ "destination": "Goa", "startDate": "2026-11-14", "endDate": "2026-11-17", "tripType": "friends" }
+{ "destination": "Goa", "startDate": "2026-11-14", "endDate": "2026-11-17", "tripType": "friends", "topPriority": "budget", "budget": 10000 }
+```
+`topPriority` and `budget` are optional (default `null`); PATCH accepts them too (`null` clears).
+```json
 ```
 
 **Success response — `201`**
@@ -393,7 +401,7 @@ Rules: `username` 3–30 chars, letters/numbers/underscore, unique (case-insensi
 ---
 
 ### `GET /trips/{tripId}/export.pdf`
-- **Description:** Generates the itinerary PDF from the finalized draft: trip details, each day with its activities (time, destination name, cost, priority label), day totals, and the trip total in INR, with the GhumakkadYatri logo.
+- **Description:** Generates the itinerary PDF from the finalized draft: trip details, each day with its activities (time, destination name, cost), the trip budget and remaining amount if set, day totals, and the trip total in INR, with the GhumakkadYatri logo.
 - **Auth required:** Yes
 
 **Success response — `200`**
@@ -407,6 +415,39 @@ Rules: `username` 3–30 chars, letters/numbers/underscore, unique (case-insensi
 | 401 | UNAUTHORIZED | Not logged in |
 | 404 | NOT_FOUND | Trip not found |
 | 409 | TRIP_NOT_FINALIZED | Trip is a draft |
+
+---
+
+### `GET /trips/{tripId}/suggestions`
+- **Description:** Up to 10 places to visit in the trip's destination, from the Google Places API (Text Search, "top attractions in {destination}"). Ordered by the trip's `topPriority`: `budget` → cheapest first (free/inexpensive first, then by rating); `destinations` → must-see first (rating × number of reviews); `time` or `null` → by rating. Not stored by the server. Works for draft and finalized trips.
+- **Auth required:** Yes
+
+**Success response — `200`**
+```json
+{
+  "suggestions": [
+    {
+      "placeId": "ChIJ...",
+      "name": "Fort Aguada",
+      "address": "Candolim, Goa",
+      "rating": 4.4,
+      "ratingCount": 51234,
+      "priceLevel": "free",
+      "mapsUrl": "https://maps.google.com/?cid=..."
+    }
+  ],
+  "orderedBy": "budget",
+  "attribution": "Google"
+}
+```
+`priceLevel`: `free` \| `inexpensive` \| `moderate` \| `expensive` \| `very_expensive` \| `null` (unknown). `rating` and `ratingCount` may be `null`. The UI must show "Powered by Google" with the results.
+
+**Error responses**
+| Status | Code | Condition |
+|--------|------|-----------|
+| 404 | NOT_FOUND | Trip not found |
+| 429 | RATE_LIMITED | More than 30 suggestion requests today |
+| 503 | SUGGESTIONS_UNAVAILABLE | Google API key missing, quota exceeded or Google unreachable |
 
 ---
 
@@ -480,9 +521,9 @@ The Compare Drafts page calls this twice (one per draft); there is no separate c
 
 **Request body**
 ```json
-{ "dayNumber": 1, "destinationName": "Baga Beach", "time": "09:30", "cost": 0, "priority": "high" }
+{ "dayNumber": 1, "destinationName": "Baga Beach", "time": "09:30", "cost": 0 }
 ```
-`time`, `cost`, `priority` optional (omit or `null`).
+`time` and `cost` optional (omit or `null`).
 
 **Success response — `201`**
 ```json
@@ -504,7 +545,7 @@ The Compare Drafts page calls this twice (one per draft); there is no separate c
 
 **Request body** (all optional)
 ```json
-{ "dayNumber": 2, "destinationName": "Baga Beach", "time": null, "cost": 150, "priority": "low" }
+{ "dayNumber": 2, "destinationName": "Baga Beach", "time": null, "cost": 150 }
 ```
 
 **Success — `200`:** `{ "activity": Activity }`
@@ -526,3 +567,4 @@ The Compare Drafts page calls this twice (one per draft); there is no separate c
 | 2026-10-03 | Added `DELETE /auth/me` (delete account, MVP); rate limit also covers it | Priyanka Ghate (with Claude) |
 | 2026-10-03 | Added error codes `METHOD_NOT_ALLOWED` (405) and `PAYLOAD_TOO_LARGE` (413) (Phase 1) | Priyanka Ghate (with Claude) |
 | 2026-10-03 | Activity `cost` is rounded to 2 decimals instead of rejected (Phase 4) | Priyanka Ghate (with Claude) |
+| 2026-10-04 | Trip gains `topPriority` and `budget`; activity `priority` removed; new `GET /trips/{tripId}/suggestions` (Google Places) and `SUGGESTIONS_UNAVAILABLE` (US-7a/b/c) | Priyanka Ghate (with Claude) |
