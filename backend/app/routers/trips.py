@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Response, status
 
 from app.models import TripStatus
+from app.schemas.drafts import FinalizeIn
 from app.schemas.trips import (
     TripCreateIn,
     TripListResponse,
@@ -44,6 +45,18 @@ def update_trip(
     return TripUpdateResponse(
         trip=trip_service.trip_detail(db, trip), deleted_activity_count=deleted
     )
+
+
+@router.post("/{trip_id}/finalize", response_model=TripResponse)
+def finalize_trip(trip_id: str, body: FinalizeIn, user: CurrentUser, db: DbSession) -> TripResponse:
+    trip = trip_service.finalize_trip(db, user, trip_id, body.draft_id)
+    return TripResponse(trip=trip_service.trip_detail(db, trip))
+
+
+@router.post("/{trip_id}/reopen", response_model=TripResponse)
+def reopen_trip(trip_id: str, user: CurrentUser, db: DbSession) -> TripResponse:
+    trip = trip_service.reopen_trip(db, user, trip_id)
+    return TripResponse(trip=trip_service.trip_detail(db, trip))
 
 
 @router.delete("/{trip_id}", status_code=status.HTTP_204_NO_CONTENT)

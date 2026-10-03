@@ -1,5 +1,6 @@
 """Trips: create, list, get, update (incl. shortening), delete (backend-spec.md §4)."""
 
+import uuid
 from datetime import date
 from decimal import Decimal
 
@@ -156,6 +157,30 @@ def update_trip(db: Session, user: User, trip_id: str, data: TripUpdateIn) -> tu
     trip.updated_at = func.now()  # also bump when only dates move
     db.flush()
     return trip, deleted
+
+
+def finalize_trip(db: Session, user: User, trip_id: str, draft_id: uuid.UUID) -> Trip:
+    trip = get_owned_trip(db, trip_id, user)
+    assert_editable(trip)  # already finalized -> TRIP_FINALIZED
+    draft = db.get(Draft, draft_id)
+    if draft is None or draft.trip_id != trip.id:
+        raise validation_error("draftId", "Choose a draft from this trip to finalize.")
+    trip.status = TripStatus.FINALIZED
+    trip.finalized_draft_id = draft.id
+    trip.updated_at = func.now()
+    db.flush()
+    return trip
+
+
+def reopen_trip(db: Session, user: User, trip_id: str) -> Trip:
+    trip = get_owned_trip(db, trip_id, user)
+    if trip.status is not TripStatus.FINALIZED:
+        raise AppError("TRIP_NOT_FINALIZED", 409, "This trip is already a draft.")
+    trip.status = TripStatus.DRAFT
+    trip.finalized_draft_id = None
+    trip.updated_at = func.now()
+    db.flush()
+    return trip
 
 
 def delete_trip(db: Session, user: User, trip_id: str) -> None:

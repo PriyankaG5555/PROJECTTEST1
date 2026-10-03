@@ -146,7 +146,7 @@ Activities in each day are sorted by `time` ascending; activities with `time: nu
 | dayNumber | integer | Required on create; 1 … `trip.dayCount` |
 | destinationName | string | Required, 1–100 chars, trimmed |
 | time | string \| null | Optional; `HH:mm` 24-hour |
-| cost | number \| null | Optional; ≥ 0, max 2 decimals, ≤ 10,000,000 |
+| cost | number \| null | Optional; ≥ 0, ≤ 10,000,000; rounded to 2 decimals by the server (half up) |
 | priority | enum \| null | Optional; `high` \| `medium` \| `low` |
 
 ## 4. Endpoints Summary
@@ -525,3 +525,4 @@ The Compare Drafts page calls this twice (one per draft); there is no separate c
 | 2026-10-03 | `/health` returns `503 degraded` when the database is unreachable (from backend spec) | Priyanka Ghate (with Claude) |
 | 2026-10-03 | Added `DELETE /auth/me` (delete account, MVP); rate limit also covers it | Priyanka Ghate (with Claude) |
 | 2026-10-03 | Added error codes `METHOD_NOT_ALLOWED` (405) and `PAYLOAD_TOO_LARGE` (413) (Phase 1) | Priyanka Ghate (with Claude) |
+| 2026-10-03 | Activity `cost` is rounded to 2 decimals instead of rejected (Phase 4) | Priyanka Ghate (with Claude) |

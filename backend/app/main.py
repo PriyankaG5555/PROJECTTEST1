@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from app.config import get_settings
 from app.errors import register_error_handlers
 from app.middleware import configure_logging, register_middleware
-from app.routers import auth, health, trips
+from app.routers import auth, drafts, health, trips
 
 API_PREFIX = "/api/v1"
 
@@ -29,6 +29,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router, prefix=API_PREFIX)
     app.include_router(auth.router, prefix=API_PREFIX)
     app.include_router(trips.router, prefix=API_PREFIX)
+    app.include_router(drafts.router, prefix=API_PREFIX)
     return app
 
 
