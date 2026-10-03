@@ -7,7 +7,7 @@ from decimal import Decimal
 import pytest
 from fastapi.testclient import TestClient
 
-from app.models.enums import Priority, TripStatus, TripType
+from app.models.enums import TripPriority, TripStatus, TripType
 from app.schemas import ActivityOut, DayOut, DraftOut, TripOut
 from app.services.pdf_service import build_itinerary_pdf, format_inr, pdf_filename
 from tests.helpers import API, add_activity, create_trip, finalize, first_draft_id
@@ -40,6 +40,8 @@ def _sample(days: int) -> tuple[TripOut, DraftOut]:
         start_date=date(2026, 11, 1),
         end_date=date(2026, 11, days),
         trip_type=TripType.FRIENDS,
+        top_priority=TripPriority.BUDGET,
+        budget=50000,
         status=TripStatus.FINALIZED,
         finalized_draft_id=None,
         day_count=days,
@@ -53,7 +55,6 @@ def _sample(days: int) -> tuple[TripOut, DraftOut]:
         destination_name="Baga Beach & Fort <Aguada>",
         time="09:30",
         cost=Decimal("1250.50"),
-        priority=Priority.HIGH,
     )
     day_list = [
         DayOut(

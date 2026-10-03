@@ -24,7 +24,7 @@ ASSETS = Path(__file__).resolve().parent.parent.parent / "assets"
 BRAND = colors.HexColor("#0369A1")
 INK = colors.HexColor("#0C4A6E")
 LINE = colors.HexColor("#BAE6FD")
-PRIORITY = {"high": "High", "medium": "Medium", "low": "Low"}
+PRIORITY_LABELS = {"time": "Time", "destinations": "Destinations", "budget": "Budget"}
 TRIP_TYPES = {
     TripType.SOLO: "Solo",
     TripType.COUPLE: "Couple",
@@ -107,7 +107,12 @@ def build_itinerary_pdf(trip: TripOut, draft: DraftOut) -> bytes:
     story.append(
         Paragraph(
             f"{_date(trip.start_date)} – {_date(trip.end_date)} · {trip.day_count} days · "
-            f"{TRIP_TYPES[trip.trip_type]} trip · Plan: {draft.name}",
+            f"{TRIP_TYPES[trip.trip_type]} trip · Plan: {draft.name}"
+            + (
+                f" · Top priority: {PRIORITY_LABELS[trip.top_priority.value]}"
+                if trip.top_priority
+                else ""
+            ),
             muted,
         )
     )
@@ -122,19 +127,18 @@ def build_itinerary_pdf(trip: TripOut, draft: DraftOut) -> bytes:
             [
                 a.time or "—",
                 Paragraph(a.destination_name, text),
-                PRIORITY.get(a.priority.value, "") if a.priority else "",
                 format_inr(a.cost, symbol) if a.cost is not None else "",
             ]
             for a in day.activities
         ]
-        rows.append(["", "Day total", "", format_inr(day.total_cost, symbol)])
-        table = Table(rows, colWidths=[18 * mm, 98 * mm, 22 * mm, 32 * mm])
+        rows.append(["", "Day total", format_inr(day.total_cost, symbol)])
+        table = Table(rows, colWidths=[18 * mm, 120 * mm, 32 * mm])
         table.setStyle(
             TableStyle(
                 [
                     ("FONT", (0, 0), (-1, -1), body, 9.5),
                     ("TEXTCOLOR", (0, 0), (-1, -1), INK),
-                    ("ALIGN", (3, 0), (3, -1), "RIGHT"),
+                    ("ALIGN", (2, 0), (2, -1), "RIGHT"),
                     ("VALIGN", (0, 0), (-1, -1), "TOP"),
                     ("LINEBELOW", (0, 0), (-1, -2), 0.5, LINE),
                     ("FONT", (0, -1), (-1, -1), heading, 9.5),
@@ -145,15 +149,20 @@ def build_itinerary_pdf(trip: TripOut, draft: DraftOut) -> bytes:
         )
         story.append(table)
 
-    total = Table(
-        [["Trip total", format_inr(draft.total_cost, symbol)]], colWidths=[138 * mm, 32 * mm]
-    )
+    summary = [["Trip total", format_inr(draft.total_cost, symbol)]]
+    if trip.budget is not None:
+        remaining = Decimal(str(trip.budget)) - Decimal(str(draft.total_cost))
+        summary.append(["Budget", format_inr(trip.budget, symbol)])
+        summary.append(
+            ["Over budget by" if remaining < 0 else "Remaining", format_inr(abs(remaining), symbol)]
+        )
+    total = Table(summary, colWidths=[138 * mm, 32 * mm])
     total.setStyle(
         TableStyle(
             [
                 ("FONT", (0, 0), (-1, -1), heading, 12),
                 ("TEXTCOLOR", (0, 0), (-1, -1), INK),
-                ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+                ("ALIGN", (1, 0), (1, -1), "RIGHT"),
                 ("LINEABOVE", (0, 0), (-1, 0), 1.5, INK),
                 ("TOPPADDING", (0, 0), (-1, -1), 6),
             ]

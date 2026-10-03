@@ -34,6 +34,8 @@ def _trip_fields(trip: Trip, draft_count: int) -> dict[str, object]:
         "start_date": trip.start_date,
         "end_date": trip.end_date,
         "trip_type": trip.trip_type,
+        "top_priority": trip.top_priority,
+        "budget": trip.budget,
         "status": trip.status,
         "finalized_draft_id": trip.finalized_draft_id,
         "day_count": trip.day_count,
@@ -84,6 +86,8 @@ def create_trip(db: Session, user: User, data: TripCreateIn) -> Trip:
         start_date=data.start_date,
         end_date=data.end_date,
         trip_type=data.trip_type,
+        top_priority=data.top_priority,
+        budget=data.budget,
         status=TripStatus.DRAFT,
     )
     trip.drafts.append(Draft(name=FIRST_DRAFT_NAME, name_normalized=FIRST_DRAFT_NAME.lower()))
@@ -153,6 +157,9 @@ def update_trip(db: Session, user: User, trip_id: str, data: TripUpdateIn) -> tu
         trip.destination = data.destination
     if data.trip_type is not None:
         trip.trip_type = data.trip_type
+    for optional in ("top_priority", "budget"):
+        if optional in data.model_fields_set:  # null clears the value
+            setattr(trip, optional, getattr(data, optional))
     trip.start_date, trip.end_date = start, end
     trip.updated_at = func.now()  # also bump when only dates move
     db.flush()

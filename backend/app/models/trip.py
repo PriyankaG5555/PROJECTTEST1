@@ -1,13 +1,21 @@
 import uuid
 from datetime import date
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, Date, ForeignKey, String
+from sqlalchemy import CheckConstraint, Date, ForeignKey, Numeric, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, Timestamps, UUIDPrimaryKey
-from app.models.enums import TripStatus, TripType, trip_status_enum, trip_type_enum
+from app.models.enums import (
+    TripPriority,
+    TripStatus,
+    TripType,
+    trip_priority_enum,
+    trip_status_enum,
+    trip_type_enum,
+)
 
 if TYPE_CHECKING:
     from app.models.draft import Draft
@@ -16,7 +24,10 @@ if TYPE_CHECKING:
 
 class Trip(UUIDPrimaryKey, Timestamps, Base):
     __tablename__ = "trips"
-    __table_args__ = (CheckConstraint("end_date >= start_date", name="end_after_start"),)
+    __table_args__ = (
+        CheckConstraint("end_date >= start_date", name="end_after_start"),
+        CheckConstraint("budget >= 0", name="budget_not_negative"),
+    )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
@@ -25,6 +36,8 @@ class Trip(UUIDPrimaryKey, Timestamps, Base):
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     end_date: Mapped[date] = mapped_column(Date, nullable=False)
     trip_type: Mapped[TripType] = mapped_column(trip_type_enum, nullable=False)
+    top_priority: Mapped[TripPriority | None] = mapped_column(trip_priority_enum, nullable=True)
+    budget: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     status: Mapped[TripStatus] = mapped_column(
         trip_status_enum, nullable=False, default=TripStatus.DRAFT, server_default="draft"
     )

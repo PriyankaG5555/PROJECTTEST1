@@ -129,7 +129,6 @@ def create_draft(db: Session, user: User, trip_id: str, data: DraftCreateIn) -> 
                     destination_name=a.destination_name,
                     time=a.time,
                     cost=a.cost,
-                    priority=a.priority,
                 )
             )
     touch(trip)

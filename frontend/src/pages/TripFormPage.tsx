@@ -4,7 +4,7 @@ import { ApiError, api } from '../api/client'
 import { useRefreshData, useTrip } from '../api/queries'
 import { useToast } from '../components/toast'
 import { ConfirmDialog, ErrorState, Field, FormError, Spinner, btn, card, inputCls } from '../components/ui'
-import { TRIP_TYPES, type AffectedActivity, type TripDetail, type TripType } from '../types'
+import { TOP_PRIORITIES, TRIP_TYPES, type AffectedActivity, type TopPriority, type TripDetail, type TripType } from '../types'
 import { dayCount } from '../utils/format'
 
 interface Values {
@@ -12,6 +12,8 @@ interface Values {
   startDate: string
   endDate: string
   tripType: TripType
+  topPriority: TopPriority | ''
+  budget: string
 }
 
 function validate(v: Values) {
@@ -22,6 +24,9 @@ function validate(v: Values) {
   if (!v.endDate) e.endDate = 'Choose an end date.'
   else if (v.startDate && v.endDate < v.startDate) e.endDate = 'End date must be on or after the start date.'
   else if (v.startDate && dayCount(v.startDate, v.endDate) > 30) e.endDate = 'A trip can be at most 30 days long.'
+  const budget = Number(v.budget)
+  if (v.budget !== '' && (Number.isNaN(budget) || budget < 0 || budget > 10_000_000))
+    e.budget = 'Budget must be between ₹0 and ₹1,00,00,000.'
   return e
 }
 
@@ -38,8 +43,15 @@ export default function TripFormPage() {
 function TripForm({ trip }: { trip?: TripDetail }) {
   const [v, setV] = useState<Values>(
     trip
-      ? { destination: trip.destination, startDate: trip.startDate, endDate: trip.endDate, tripType: trip.tripType }
-      : { destination: '', startDate: '', endDate: '', tripType: 'solo' },
+      ? {
+          destination: trip.destination,
+          startDate: trip.startDate,
+          endDate: trip.endDate,
+          tripType: trip.tripType,
+          topPriority: trip.topPriority ?? '',
+          budget: trip.budget?.toString() ?? '',
+        }
+      : { destination: '', startDate: '', endDate: '', tripType: 'solo', topPriority: '', budget: '' },
   )
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [formError, setFormError] = useState<string>()
@@ -60,7 +72,12 @@ function TripForm({ trip }: { trip?: TripDetail }) {
     setFormError(undefined)
     if (Object.keys(found).length) return
     setBusy(true)
-    const body = { ...v, destination: v.destination.trim() }
+    const body = {
+      ...v,
+      destination: v.destination.trim(),
+      topPriority: v.topPriority || null,
+      budget: v.budget === '' ? null : Number(v.budget),
+    }
     try {
       if (trip) {
         const res = await api<{ deletedActivityCount: number }>(`/trips/${trip.id}`, 'PATCH', {
@@ -138,6 +155,24 @@ function TripForm({ trip }: { trip?: TripDetail }) {
             ))}
           </select>
         </Field>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field id="topPriority" label={<>Top priority <span className="font-normal text-slate-500">(optional)</span></>}
+            error={errors.topPriority} hint="What matters most when time, places or money run short?">
+            <select id="topPriority" className={inputCls} value={v.topPriority} onChange={set('topPriority')}>
+              <option value="">Not set</option>
+              {Object.entries(TOP_PRIORITIES).map(([k, label]) => (
+                <option key={k} value={k}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field id="budget" label={<>Budget in ₹ <span className="font-normal text-slate-500">(optional)</span></>}
+            error={errors.budget}>
+            <input id="budget" type="number" min="0" step="1" inputMode="numeric" className={inputCls}
+              value={v.budget} onChange={set('budget')} placeholder="e.g. 25000" />
+          </Field>
+        </div>
         {affected && (
           <div className="grid gap-1.5 rounded-xl bg-amber-50 p-3 text-sm text-amber-900" role="alert">
             <b>

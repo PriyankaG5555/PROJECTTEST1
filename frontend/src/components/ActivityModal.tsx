@@ -1,22 +1,26 @@
 import { useState, type FormEvent } from 'react'
 import { ApiError, api } from '../api/client'
-import { PRIORITIES, type Activity, type Priority } from '../types'
+import type { Activity } from '../types'
 import { Field, FormError, Modal, btn, inputCls } from './ui'
 
 interface Props {
   draftId: string
   dayNumber: number
   activity?: Activity
+  /** Pre-filled name (from a suggestion). */
+  initialName?: string
+  /** When set, the user picks the day (1..dayCount). */
+  dayCount?: number
   onSaved: (message: string) => void
   onClose: () => void
 }
 
 /** Add or edit an activity (frontend-spec.md §7). */
-export default function ActivityModal({ draftId, dayNumber, activity, onSaved, onClose }: Props) {
-  const [name, setName] = useState(activity?.destinationName ?? '')
+export default function ActivityModal({ draftId, dayNumber, activity, initialName, dayCount, onSaved, onClose }: Props) {
+  const [name, setName] = useState(activity?.destinationName ?? initialName ?? '')
+  const [day, setDay] = useState(dayNumber)
   const [time, setTime] = useState(activity?.time ?? '')
   const [cost, setCost] = useState(activity?.cost?.toString() ?? '')
-  const [priority, setPriority] = useState<Priority | ''>(activity?.priority ?? '')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [formError, setFormError] = useState<string>()
   const [busy, setBusy] = useState(false)
@@ -29,11 +33,11 @@ export default function ActivityModal({ draftId, dayNumber, activity, onSaved, o
     if (costNum !== null && (Number.isNaN(costNum) || costNum < 0)) found.cost = 'Cost must be 0 or more.'
     setErrors(found)
     if (Object.keys(found).length) return
-    const body = { destinationName: name.trim(), time: time || null, cost: costNum, priority: priority || null }
+    const body = { destinationName: name.trim(), time: time || null, cost: costNum }
     setBusy(true)
     try {
       if (activity) await api(`/activities/${activity.id}`, 'PATCH', body)
-      else await api(`/drafts/${draftId}/activities`, 'POST', { ...body, dayNumber })
+      else await api(`/drafts/${draftId}/activities`, 'POST', { ...body, dayNumber: day })
       onSaved(activity ? 'Activity updated' : 'Activity added')
     } catch (err) {
       if (err instanceof ApiError && Object.keys(err.fields).length) setErrors(err.fields)
@@ -44,7 +48,7 @@ export default function ActivityModal({ draftId, dayNumber, activity, onSaved, o
 
   const optional = <span className="font-normal text-slate-500">(optional)</span>
   return (
-    <Modal title={`${activity ? 'Edit activity' : 'Add activity'} · Day ${dayNumber}`} onClose={onClose}>
+    <Modal title={`${activity ? 'Edit activity' : 'Add activity'} · Day ${day}`} onClose={onClose}>
       <form className="grid gap-4" onSubmit={submit} noValidate>
         <Field id="act-name" label="Destination name" error={errors.destinationName}>
           <input id="act-name" className={inputCls} maxLength={100} autoFocus placeholder="e.g. Baga Beach"
@@ -59,18 +63,15 @@ export default function ActivityModal({ draftId, dayNumber, activity, onSaved, o
               value={cost} onChange={(e) => setCost(e.target.value)} />
           </Field>
         </div>
-        <fieldset className="grid gap-1.5">
-          <legend className="mb-1 text-sm font-medium">Priority {optional}</legend>
-          <div className="flex flex-wrap gap-2">
-            {([['', 'None'], ...Object.entries(PRIORITIES)] as [Priority | '', string][]).map(([k, label]) => (
-              <label key={k || 'none'}
-                className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-brand-400 px-2.5 py-1.5 text-sm has-checked:bg-brand-50">
-                <input type="radio" name="priority" checked={priority === k} onChange={() => setPriority(k)} />
-                {label}
-              </label>
-            ))}
-          </div>
-        </fieldset>
+        {dayCount && (
+          <Field id="act-day" label="Day">
+            <select id="act-day" className={inputCls} value={day} onChange={(e) => setDay(Number(e.target.value))}>
+              {Array.from({ length: dayCount }, (_, i) => (
+                <option key={i + 1} value={i + 1}>Day {i + 1}</option>
+              ))}
+            </select>
+          </Field>
+        )}
         <FormError message={formError} />
         <div className="flex justify-end gap-2">
           <button type="button" className={btn.ghost} onClick={onClose}>

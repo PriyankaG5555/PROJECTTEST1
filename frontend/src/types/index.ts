@@ -1,7 +1,7 @@
 // Shapes from api-contract-spec.md §3.
 export type TripType = 'solo' | 'couple' | 'family' | 'friends'
 export type TripStatus = 'draft' | 'finalized'
-export type Priority = 'high' | 'medium' | 'low'
+export type TopPriority = 'time' | 'destinations' | 'budget'
 
 export const TRIP_TYPES: Record<TripType, string> = {
   solo: 'Solo',
@@ -9,7 +9,13 @@ export const TRIP_TYPES: Record<TripType, string> = {
   family: 'Family',
   friends: 'Friends',
 }
-export const PRIORITIES: Record<Priority, string> = { high: 'High', medium: 'Medium', low: 'Low' }
+export const TOP_PRIORITIES: Record<TopPriority, string> = {
+  time: 'Time',
+  destinations: 'Destinations',
+  budget: 'Budget',
+}
+/** Days with more activities than this are flagged as busy (goal-spec F8). */
+export const BUSY_DAY_ACTIVITIES = 4
 
 export interface User {
   id: string
@@ -23,6 +29,8 @@ export interface Trip {
   startDate: string
   endDate: string
   tripType: TripType
+  topPriority: TopPriority | null
+  budget: number | null
   status: TripStatus
   finalizedDraftId: string | null
   dayCount: number
@@ -50,7 +58,6 @@ export interface Activity {
   destinationName: string
   time: string | null
   cost: number | null
-  priority: Priority | null
 }
 
 export interface Day {
@@ -69,6 +76,16 @@ export interface Draft {
   days: Day[]
   createdAt: string
   updatedAt: string
+}
+
+export interface Suggestion {
+  placeId: string
+  name: string
+  address: string | null
+  rating: number | null
+  ratingCount: number | null
+  priceLevel: string | null
+  mapsUrl: string | null
 }
 
 export interface AffectedActivity {

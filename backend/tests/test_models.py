@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models import Activity, Base, Draft, Priority, Trip, TripStatus, TripType, User
+from app.models import Activity, Base, Draft, Trip, TripStatus, TripType, User
 
 
 def make_user(db: Session, name: str = "riya_travels") -> User:
@@ -91,7 +91,6 @@ def test_deleting_user_cascades_to_everything(db: Session) -> None:
             destination_name="Baga Beach",
             time="09:30",
             cost=Decimal("0"),
-            priority=Priority.HIGH,
         )
     )
     trip.finalized_draft_id = trip.drafts[0].id

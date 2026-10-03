@@ -15,10 +15,10 @@ class TripStatus(StrEnum):
     FINALIZED = "finalized"
 
 
-class Priority(StrEnum):
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
+class TripPriority(StrEnum):
+    TIME = "time"
+    DESTINATIONS = "destinations"
+    BUDGET = "budget"
 
 
 def pg_enum(enum_cls: type[StrEnum], name: str) -> SAEnum:
@@ -28,4 +28,4 @@ def pg_enum(enum_cls: type[StrEnum], name: str) -> SAEnum:
 
 trip_type_enum = pg_enum(TripType, "trip_type")
 trip_status_enum = pg_enum(TripStatus, "trip_status")
-priority_enum = pg_enum(Priority, "priority")
+trip_priority_enum = pg_enum(TripPriority, "trip_priority")
