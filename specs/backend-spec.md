@@ -149,6 +149,8 @@ Rows older than 1 hour are deleted opportunistically on each auth request.
 | `SESSION_TTL_DAYS` | Session length in days | No | `7` |
 | `COOKIE_SECURE` | Set `Secure` on cookie (`false` only for local http) | No | `true` |
 | `LOG_LEVEL` | Logging level | No | `INFO` |
+| `TEST_DATABASE_URL` | Test database for `pytest` (Neon `test` branch). **Wiped on every test run**; must differ from `DATABASE_URL`. Local only. | For DB tests | — |
+| `MIGRATION_DATABASE_URL` | Direct (non-pooled) Neon URL for Alembic; falls back to `DATABASE_URL` | No | — |
 
 Settings are loaded and validated with `pydantic-settings`. `backend/.env.example` lists all variables with safe placeholder values; real `.env` files are git-ignored. In production, variables are set in the Vercel project settings.
 
@@ -180,7 +182,8 @@ PROJECTTEST1/
     .env.example
     alembic.ini
     alembic/
-      versions/           # migrations
+      env.py
+      versions/           # migrations (tests assert they match the models)
     assets/
       logo.svg            # copied from specs/assets/logo.svg
       fonts/              # Poppins & Inter TTF files
@@ -190,6 +193,7 @@ PROJECTTEST1/
       db.py               # engine (NullPool), session dependency
       security.py         # bcrypt, JWT, cookie helpers, get_current_user
       errors.py           # AppError + exception handlers
+      middleware.py       # request ID, JSON access log, security headers, body limit
       models/             # SQLAlchemy models: user, trip, draft, activity, auth_attempt
       schemas/            # Pydantic models (camelCase aliases)
       routers/
