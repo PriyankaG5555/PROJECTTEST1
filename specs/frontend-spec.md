@@ -100,16 +100,34 @@ interface Trip {
   tripType: TripType;
   status: TripStatus;
   finalizedDraftId: string | null;
+  dayCount: number;
+  draftCount: number;
   createdAt: string;
   updatedAt: string;
+}
+
+interface DraftSummary {
+  id: string;
+  name: string;
+  isFinal: boolean;
+  activityCount: number;
+  totalCost: number;          // INR
+  updatedAt: string;
+}
+
+interface TripDetail extends Trip {
+  drafts: DraftSummary[];
 }
 
 interface Draft {
   id: string;
   tripId: string;
   name: string;
+  isFinal: boolean;
   days: Day[];
   totalCost: number;          // INR
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface Day {
@@ -121,6 +139,7 @@ interface Day {
 
 interface Activity {
   id: string;
+  dayNumber: number;
   destinationName: string;    // required
   time: string | null;        // "HH:mm" 24h
   cost: number | null;        // INR
@@ -129,7 +148,7 @@ interface Activity {
 ```
 
 ## 6. API Integration
-> Endpoint paths are provisional; the final paths are defined in `api-contract-spec.md`.
+> Paths are relative to `/api/v1` and match `api-contract-spec.md`; request/response details are defined there.
 
 | UI action | Endpoint (from API contract) | Loading / error handling |
 |-----------|------------------------------|--------------------------|
@@ -140,7 +159,7 @@ interface Activity {
 | List trips | `GET /trips` | Skeleton cards; EmptyState "No trips yet"; ErrorState with retry |
 | Create trip | `POST /trips` | Button spinner; field errors inline |
 | Get trip | `GET /trips/:tripId` | Page spinner; 404 → Not Found |
-| Edit trip | `PATCH /trips/:tripId` | Inline errors; warning if days with activities would be removed |
+| Edit trip | `PATCH /trips/:tripId` | Inline errors; on `409 ACTIVITIES_WOULD_BE_DELETED` show warning listing `details.affected`, then resend with `confirmDeleteActivities: true` |
 | Delete trip | `DELETE /trips/:tripId` | Confirm first; toast on success |
 | List / get drafts | `GET /trips/:tripId/drafts`, `GET /drafts/:draftId` | Spinner in planner area |
 | Create / rename / delete draft | `POST /trips/:tripId/drafts`, `PATCH /drafts/:draftId`, `DELETE /drafts/:draftId` | Toast on success/failure |
