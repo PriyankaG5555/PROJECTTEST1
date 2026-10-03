@@ -3,14 +3,15 @@
 > Purpose: Define the UI, user flows, and client-side architecture. Must satisfy user stories in `goal-spec.md` and consume only endpoints defined in `api-contract-spec.md`.
 
 ## 1. Tech Stack
-- **Framework:** React 18 (single-page app)
+- **Framework:** React 19 (single-page app)
 - **Language:** TypeScript
-- **Styling:** Tailwind CSS (mobile-first utility classes)
+- **Styling:** Tailwind CSS v4 (mobile-first utility classes; brand tokens defined with `@theme` in `src/index.css`, no separate config file)
 - **State management:** TanStack Query for server data; React state/context for UI-only state (current user, open dialogs)
 - **Data fetching:** `fetch` wrapper (`api/client.ts`) + TanStack Query hooks; cookies sent with `credentials: "include"`
-- **Routing:** React Router v6
+- **Routing:** React Router v8 (`react-router` package, declarative `<Routes>`)
 - **Forms & validation:** React Hook Form + Zod
 - **Build tool / package manager:** Vite + npm
+- **Linting:** oxlint (Vite template default) + `tsc` type-check
 - **Testing:** Vitest + React Testing Library (unit/component); Playwright (e2e for P0 flows)
 
 ## 2. Pages / Routes
@@ -236,8 +237,8 @@ frontend/
     logo.svg              # copied from specs/assets/logo.svg
     favicon.svg           # icon part of the logo
   vite.config.ts
-  tailwind.config.ts
   src/
+    index.css             # Tailwind import + brand tokens (@theme)
     main.tsx              # app entry, QueryClient, Router
     App.tsx               # route definitions
     api/

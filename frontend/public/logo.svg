@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 80" role="img" aria-labelledby="title">
+  <title id="title">GhumakkadYatri logo</title>
+  <!-- Icon: Gen Z traveller with backpack -->
+  <g id="icon">
+    <circle cx="40" cy="40" r="38" fill="#BAE6FD"/>
+    <circle cx="40" cy="40" r="38" fill="none" stroke="#38BDF8" stroke-width="3"/>
+    <!-- legs (walking) -->
+    <path d="M37 52 L31 66" stroke="#0C4A6E" stroke-width="5" stroke-linecap="round"/>
+    <path d="M44 52 L49 66" stroke="#0C4A6E" stroke-width="5" stroke-linecap="round"/>
+    <!-- sneakers -->
+    <ellipse cx="29.5" cy="67" rx="4.5" ry="2.5" fill="#FFFFFF" stroke="#0C4A6E" stroke-width="1.5"/>
+    <ellipse cx="51" cy="67" rx="4.5" ry="2.5" fill="#FFFFFF" stroke="#0C4A6E" stroke-width="1.5"/>
+    <!-- backpack -->
+    <rect x="20" y="29" width="17" height="24" rx="6" fill="#FB923C"/>
+    <rect x="22.5" y="40" width="12" height="8" rx="3" fill="#F97316"/>
+    <!-- body (hoodie) -->
+    <rect x="31" y="29" width="18" height="25" rx="8" fill="#0369A1"/>
+    <!-- backpack strap -->
+    <path d="M35 30 Q38 40 35 50" stroke="#FDBA74" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <!-- arm waving -->
+    <path d="M47 34 L56 26" stroke="#0369A1" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="57" cy="25" r="3" fill="#F5C9A0"/>
+    <!-- head -->
+    <circle cx="40" cy="21" r="8" fill="#F5C9A0"/>
+    <!-- bucket hat -->
+    <path d="M30 17 Q40 5 50 17 Z" fill="#FACC15"/>
+    <rect x="28" y="15.5" width="24" height="3" rx="1.5" fill="#EAB308"/>
+    <!-- sunglasses -->
+    <rect x="35" y="20" width="5" height="3" rx="1.2" fill="#0F172A"/>
+    <rect x="41" y="20" width="5" height="3" rx="1.2" fill="#0F172A"/>
+    <path d="M40 21.3 L41 21.3" stroke="#0F172A" stroke-width="1"/>
+    <!-- smile -->
+    <path d="M38 25.5 Q40.5 27.5 43 25.5" stroke="#9A3412" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+  </g>
+  <!-- Wordmark -->
+  <text x="92" y="50" font-family="Poppins, 'Segoe UI', sans-serif" font-size="30" font-weight="700" letter-spacing="-0.5">
+    <tspan fill="#0369A1">Ghumakkad</tspan><tspan fill="#0EA5E9">Yatri</tspan>
+  </text>
+  <text x="93" y="68" font-family="Inter, 'Segoe UI', sans-serif" font-size="11" font-weight="500" fill="#0C4A6E" letter-spacing="1.5">PLAN · PACK · GO</text>
+</svg>
