@@ -24,6 +24,15 @@ class AppError(Exception):
         self.details = details
 
 
+def validation_error(field: str, message: str) -> AppError:
+    """A 400 VALIDATION_ERROR for one field (camelCase name), for rules Pydantic can't express."""
+    return AppError("VALIDATION_ERROR", 400, message, {"fields": {field: message}})
+
+
+def not_found() -> AppError:
+    return AppError("NOT_FOUND", 404, "Not found.")
+
+
 def error_response(
     status: int, code: str, message: str, details: dict[str, Any] | None = None
 ) -> JSONResponse:
