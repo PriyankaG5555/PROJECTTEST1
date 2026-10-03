@@ -72,3 +72,24 @@ def db(migrated_db: None) -> Iterator[Session]:
 @pytest.fixture
 def client() -> TestClient:
     return TestClient(app, raise_server_exceptions=False)
+
+
+PASSWORD = "s3cure-pass"
+
+
+def signup_client(username: str = "riya_travels", password: str = PASSWORD) -> TestClient:
+    """A new client (own cookie jar) with a freshly signed-up, logged-in user."""
+    c = TestClient(app, raise_server_exceptions=False)
+    response = c.post("/api/v1/auth/signup", json={"username": username, "password": password})
+    assert response.status_code == 201, response.text
+    return c
+
+
+@pytest.fixture
+def logged_in_client(db: Session) -> TestClient:
+    return signup_client()
+
+
+@pytest.fixture
+def other_user_client(db: Session) -> TestClient:
+    return signup_client("other_user")

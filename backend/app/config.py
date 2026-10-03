@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     cookie_secure: bool = True
     log_level: str = "INFO"
 
+    @property
+    def bcrypt_rounds(self) -> int:
+        # Cost 12 in real use (backend-spec §1); cheap hashing keeps the test suite fast.
+        return 4 if self.environment == "test" else 12
+
 
 @lru_cache
 def get_settings() -> Settings:
