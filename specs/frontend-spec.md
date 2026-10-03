@@ -9,7 +9,7 @@
 - **State management:** TanStack Query for server data; React state/context for UI-only state (current user, open dialogs)
 - **Data fetching:** `fetch` wrapper (`api/client.ts`) + TanStack Query hooks; cookies sent with `credentials: "include"`
 - **Routing:** React Router v8 (`react-router` package, declarative `<Routes>`)
-- **Forms & validation:** React Hook Form + Zod
+- **Forms & validation:** plain controlled React forms with small validator functions (no form library; the forms are small). The backend validates everything again.
 - **Build tool / package manager:** Vite + npm
 - **Linting:** oxlint (Vite template default) + `tsc` type-check
 - **Testing:** Vitest + React Testing Library (unit/component); Playwright (e2e for P0 flows)
