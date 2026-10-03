@@ -15,6 +15,10 @@
 }
 
 @layer base {
+  :focus-visible {
+    outline: 3px solid var(--color-brand-400);
+    outline-offset: 2px;
+  }
   body {
     @apply bg-brand-50 font-sans text-brand-900 antialiased;
   }
