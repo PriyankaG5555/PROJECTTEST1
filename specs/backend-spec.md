@@ -12,7 +12,7 @@
 - **PDF generation:** **ReportLab** + `svglib` (logo) with embedded Poppins/Inter TTF fonts (both include the `₹` glyph). Pure Python — no headless browser.
 - **Rate limiting:** Stored in PostgreSQL (`auth_attempts` table) — in-memory limiters don't work on serverless, where each request may hit a different instance.
 - **Logging:** Python `logging` with a JSON formatter (`python-json-logger`)
-- **External services / APIs:** None in MVP (no paid third-party APIs).
+- **External services / APIs:** **Google Places API (New)** — Text Search, called server-side with `httpx` (the key is never sent to the browser). See §7.
 - **Testing:** pytest + FastAPI `TestClient` (`httpx2`) against a separate test PostgreSQL database; `ruff` (lint/format) and `mypy` (type-check)
 
 ## 2. Architecture Overview
@@ -60,6 +60,8 @@ models/        → SQLAlchemy ORM models → PostgreSQL
 | start_date | DATE | NOT NULL | |
 | end_date | DATE | NOT NULL, CHECK `end_date >= start_date` | Length 1–30 days (checked in service) |
 | trip_type | ENUM `trip_type` | NOT NULL | `solo`, `couple`, `family`, `friends` |
+| top_priority | ENUM `trip_priority` | NULL | `time`, `destinations`, `budget`; NULL = not set |
+| budget | NUMERIC(12,2) | NULL, CHECK `budget >= 0` | Total trip budget in INR |
 | status | ENUM `trip_status` | NOT NULL, default `draft` | `draft`, `finalized` |
 | finalized_draft_id | UUID | NULL, FK → drafts.id ON DELETE SET NULL | Set only when `status = finalized` |
 | created_at | TIMESTAMPTZ | NOT NULL | |
@@ -84,11 +86,17 @@ models/        → SQLAlchemy ORM models → PostgreSQL
 | destination_name | VARCHAR(100) | NOT NULL | |
 | time | CHAR(5) | NULL, CHECK matches `HH:mm` | Stored as text; sorts correctly as a string |
 | cost | NUMERIC(12,2) | NULL, CHECK `>= 0` | INR |
-| priority | ENUM `priority` | NULL | `high`, `medium`, `low` |
 | created_at | TIMESTAMPTZ | NOT NULL | Tie-breaker for ordering |
 | updated_at | TIMESTAMPTZ | NOT NULL | |
 
 Index: (`draft_id`, `day_number`, `time`) for loading a draft in display order.
+
+### Entity: SuggestionUsage (`suggestion_usage`) — per-user daily limit for Google calls
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| user_id | UUID | PK, FK → users.id ON DELETE CASCADE | |
+| day | DATE | PK | UTC day |
+| count | INTEGER | NOT NULL | Requests that day (limit 30) |
 
 ### Entity: AuthAttempt (`auth_attempts`) — rate limiting
 | Field | Type | Constraints | Description |
@@ -138,7 +146,7 @@ Rows older than 1 hour are deleted opportunistically on each auth request.
 | Service | Purpose | Failure / fallback behavior |
 |---------|---------|-----------------------------|
 | PostgreSQL (Neon) | Data storage | DB unavailable → `500 INTERNAL_ERROR`; `/health` returns `503 { "status": "degraded" }` |
-| — | No third-party APIs in MVP | — |
+| Google Places API (New) — `POST https://places.googleapis.com/v1/places:searchText` | Activity suggestions (F11). Query `top attractions in {destination}`, `maxResultCount` 10, field mask `places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.priceLevel,places.googleMapsUri` (only what we show, to limit cost). Results re-ordered by trip priority; never stored (Google terms). Limit 30 requests per user per day. | Key missing, timeout (8 s), error or quota → `503 SUGGESTIONS_UNAVAILABLE`; the rest of the app is unaffected |
 
 ## 8. Configuration & Environment
 | Variable | Description | Required | Default |
@@ -150,6 +158,7 @@ Rows older than 1 hour are deleted opportunistically on each auth request.
 | `COOKIE_SECURE` | Set `Secure` on cookie (`false` only for local http) | No | `true` |
 | `LOG_LEVEL` | Logging level | No | `INFO` |
 | `TEST_DATABASE_URL` | Test database for `pytest` (Neon `test` branch). **Wiped on every test run**; must differ from `DATABASE_URL`. Local only. | For DB tests | — |
+| `GOOGLE_PLACES_API_KEY` | Google Cloud API key restricted to the Places API (New). Without it, suggestions return 503 | No | — |
 | `MIGRATION_DATABASE_URL` | Direct (non-pooled) Neon URL for Alembic; falls back to `DATABASE_URL` | No | — |
 
 Settings are loaded and validated with `pydantic-settings`. `backend/.env.example` lists all variables with safe placeholder values; real `.env` files are git-ignored. In production, variables are set in the Vercel project settings.

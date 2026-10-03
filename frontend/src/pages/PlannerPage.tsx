@@ -4,9 +4,10 @@ import { api, exportPdfUrl } from '../api/client'
 import { useDraft, useRefreshData, useTrip } from '../api/queries'
 import ActivityModal from '../components/ActivityModal'
 import DraftSwitcher from '../components/DraftSwitcher'
+import SuggestionsPanel from '../components/SuggestionsPanel'
 import { useToast } from '../components/toast'
-import { ConfirmDialog, ErrorState, PriorityLabel, Spinner, StatusBadge, btn, card } from '../components/ui'
-import { TRIP_TYPES, type Activity, type Day } from '../types'
+import { ConfirmDialog, ErrorState, Spinner, StatusBadge, btn, card } from '../components/ui'
+import { BUSY_DAY_ACTIVITIES, TOP_PRIORITIES, TRIP_TYPES, type Activity, type Day, type TopPriority } from '../types'
 import { inr, longDate } from '../utils/format'
 
 type Confirm = { kind: 'finalize' | 'reopen' } | { kind: 'delete-activity'; activity: Activity } | null
@@ -19,7 +20,7 @@ export default function PlannerPage() {
   const draft = useDraft(draftId)
   const refresh = useRefreshData()
   const toast = useToast()
-  const [editing, setEditing] = useState<{ day: number; activity?: Activity } | null>(null)
+  const [editing, setEditing] = useState<{ day: number; activity?: Activity; name?: string; chooseDay?: boolean } | null>(null)
   const [confirm, setConfirm] = useState<Confirm>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string>()
@@ -66,6 +67,11 @@ export default function PlannerPage() {
               <span>{longDate(t.startDate)} – {longDate(t.endDate)}</span>
               <span>{t.dayCount} days</span>
               <span>{TRIP_TYPES[t.tripType]}</span>
+              {t.topPriority && (
+                <span className="rounded-full bg-brand-50 px-2 font-medium text-brand-900">
+                  Top priority: {TOP_PRIORITIES[t.topPriority]}
+                </span>
+              )}
               {draft.data && <span>Total <b className="tabular-nums">{inr(draft.data.totalCost)}</b></span>}
             </p>
           </div>
@@ -86,6 +92,9 @@ export default function PlannerPage() {
             )}
           </div>
         </div>
+        {draft.data && t.budget !== null && (
+          <BudgetBar planned={draft.data.totalCost} budget={t.budget} topPriority={t.topPriority} />
+        )}
         {readOnly && (
           <p className="rounded-xl bg-green-50 px-3 py-2 text-sm font-medium text-green-800">
             🔒 Finalized from “{finalName}”. All drafts are read-only. Reopen to make changes.
@@ -99,7 +108,7 @@ export default function PlannerPage() {
       {draft.data && (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(270px,1fr))] items-start gap-4">
           {draft.data.days.map((day) => (
-            <DayCard key={day.dayNumber} day={day} readOnly={readOnly}
+            <DayCard key={day.dayNumber} day={day} readOnly={readOnly} timeFirst={t.topPriority === 'time'}
               onAdd={() => setEditing({ day: day.dayNumber })}
               onEdit={(a) => setEditing({ day: day.dayNumber, activity: a })}
               onDelete={(a) => setConfirm({ kind: 'delete-activity', activity: a })} />
@@ -107,8 +116,12 @@ export default function PlannerPage() {
         </div>
       )}
 
+      <SuggestionsPanel trip={t} readOnly={readOnly}
+        onAdd={(name) => setEditing({ day: 1, name, chooseDay: true })} />
+
       {editing && draftId && (
         <ActivityModal draftId={draftId} dayNumber={editing.day} activity={editing.activity}
+          initialName={editing.name} dayCount={editing.chooseDay ? t.dayCount : undefined}
           onClose={() => setEditing(null)}
           onSaved={async (msg) => { setEditing(null); await changed(msg) }} />
       )}
@@ -134,19 +147,56 @@ export default function PlannerPage() {
   )
 }
 
+function BudgetBar({ planned, budget, topPriority }: { planned: number; budget: number; topPriority: TopPriority | null }) {
+  const over = planned > budget
+  const strict = topPriority === 'budget'
+  const pct = budget > 0 ? Math.min(100, Math.round((planned / budget) * 100)) : 100
+  const bar = over ? (strict ? 'bg-red-600' : 'bg-amber-500') : 'bg-brand-500'
+  return (
+    <div className="grid gap-1.5" aria-label="Budget">
+      <div className="flex flex-wrap justify-between gap-2 text-sm">
+        <span>
+          Planned <b className="tabular-nums">{inr(planned)}</b> of <b className="tabular-nums">{inr(budget)}</b> budget
+        </span>
+        <span className="tabular-nums">{over ? `${inr(planned - budget)} over` : `${inr(budget - planned)} left`}</span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-brand-50">
+        <div className={`h-full rounded-full ${bar}`} style={{ width: `${pct}%` }} />
+      </div>
+      {over && (
+        <p role="alert" className={`rounded-xl px-3 py-2 text-sm font-medium ${strict ? 'bg-red-50 text-red-800' : 'bg-amber-50 text-amber-900'}`}>
+          {strict
+            ? 'Over budget — budget is your top priority. Remove or swap costly activities.'
+            : 'This plan is over your budget.'}
+        </p>
+      )}
+    </div>
+  )
+}
+
 function DayCard(props: {
   day: Day
   readOnly: boolean
+  timeFirst: boolean
   onAdd: () => void
   onEdit: (a: Activity) => void
   onDelete: (a: Activity) => void
 }) {
   const { day, readOnly } = props
+  const busy = day.activities.length > BUSY_DAY_ACTIVITIES
   return (
     <section className={`${card} grid min-w-0`} aria-label={`Day ${day.dayNumber}`}>
       <header className="flex items-baseline justify-between gap-2 rounded-t-2xl border-b border-brand-200 bg-brand-50 px-4 py-3">
         <span className="font-display font-bold">Day {day.dayNumber}</span>
-        <span className="text-sm text-slate-600">{longDate(day.date)}</span>
+        <span className="flex items-center gap-2 text-sm text-slate-600">
+          {busy && (
+            <span title={props.timeFirst ? 'Time is your top priority — consider moving some activities to another day.' : undefined}
+              className={`rounded-md px-1.5 text-xs font-bold ${props.timeFirst ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'}`}>
+              Busy day
+            </span>
+          )}
+          {longDate(day.date)}
+        </span>
       </header>
       {day.activities.length === 0 ? (
         <p className="px-4 py-3 text-sm text-slate-600">No activities yet{readOnly ? '' : ' — add one'}.</p>
@@ -161,7 +211,6 @@ function DayCard(props: {
                 <span className="font-medium break-words">{a.destinationName}</span>
                 <span className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
                   {a.cost !== null && <span className="tabular-nums">{inr(a.cost)}</span>}
-                  <PriorityLabel priority={a.priority} />
                 </span>
               </span>
               {!readOnly && (

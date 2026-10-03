@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     session_ttl_days: int = Field(default=7, ge=1)
     cookie_secure: bool = True
     log_level: str = "INFO"
+    google_places_api_key: str | None = None
 
     @property
     def bcrypt_rounds(self) -> int:

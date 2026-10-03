@@ -6,9 +6,10 @@ from typing import Annotated
 
 from pydantic import StringConstraints
 
-from app.models.enums import TripType
+from app.models.enums import TripPriority, TripType
 from app.schemas import TripDetailOut, TripOut
 from app.schemas.base import ApiModel
+from app.schemas.drafts import Cost
 
 Destination = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
 
@@ -18,6 +19,8 @@ class TripCreateIn(ApiModel):
     start_date: date
     end_date: date
     trip_type: TripType
+    top_priority: TripPriority | None = None
+    budget: Cost | None = None
 
 
 class TripUpdateIn(ApiModel):
@@ -27,6 +30,8 @@ class TripUpdateIn(ApiModel):
     start_date: date | None = None
     end_date: date | None = None
     trip_type: TripType | None = None
+    top_priority: TripPriority | None = None  # null clears
+    budget: Cost | None = None  # null clears
     confirm_delete_activities: bool = False
 
 
@@ -49,3 +54,19 @@ class AffectedActivity(ApiModel):
     day_number: int
     activity_id: uuid.UUID
     destination_name: str
+
+
+class SuggestionOut(ApiModel):
+    place_id: str
+    name: str
+    address: str | None
+    rating: float | None
+    rating_count: int | None
+    price_level: str | None
+    maps_url: str | None
+
+
+class SuggestionsResponse(ApiModel):
+    suggestions: list[SuggestionOut]
+    ordered_by: TripPriority | None
+    attribution: str = "Google"

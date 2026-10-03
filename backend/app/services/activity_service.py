@@ -26,7 +26,6 @@ def add_activity(db: Session, user: User, draft_id: str, data: ActivityCreateIn)
         destination_name=data.destination_name,
         time=data.time,
         cost=data.cost,
-        priority=data.priority,
     )
     db.add(activity)
     touch(draft.trip, draft)
@@ -49,7 +48,7 @@ def update_activity(db: Session, user: User, activity_id: str, data: ActivityUpd
         activity.day_number = data.day_number
     if data.destination_name is not None:
         activity.destination_name = data.destination_name
-    for optional in ("time", "cost", "priority"):
+    for optional in ("time", "cost"):
         if optional in fields:  # null clears the value
             setattr(activity, optional, getattr(data, optional))
 

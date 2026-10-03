@@ -8,7 +8,7 @@ from datetime import date, datetime
 
 from pydantic import field_serializer
 
-from app.models.enums import Priority, TripStatus, TripType
+from app.models.enums import TripPriority, TripStatus, TripType
 from app.schemas.base import ApiModel, to_camel
 
 __all__ = [
@@ -40,12 +40,18 @@ class TripOut(ApiModel):
     start_date: date
     end_date: date
     trip_type: TripType
+    top_priority: TripPriority | None
+    budget: float | None
     status: TripStatus
     finalized_draft_id: uuid.UUID | None
     day_count: int
     draft_count: int
     created_at: datetime
     updated_at: datetime
+
+    @field_serializer("budget")
+    def _ser_budget(self, v: float | None) -> float | None:
+        return _money(v)
 
 
 class DraftSummaryOut(ApiModel):
@@ -71,7 +77,6 @@ class ActivityOut(ApiModel):
     destination_name: str
     time: str | None
     cost: float | None
-    priority: Priority | None
 
     @field_serializer("cost")
     def _ser_cost(self, v: float | None) -> float | None:

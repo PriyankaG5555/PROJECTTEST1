@@ -7,7 +7,6 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, Timestamps, UUIDPrimaryKey
-from app.models.enums import Priority, priority_enum
 
 if TYPE_CHECKING:
     from app.models.draft import Draft
@@ -29,6 +28,5 @@ class Activity(UUIDPrimaryKey, Timestamps, Base):
     destination_name: Mapped[str] = mapped_column(String(100), nullable=False)
     time: Mapped[str | None] = mapped_column(CHAR(5), nullable=True)
     cost: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
-    priority: Mapped[Priority | None] = mapped_column(priority_enum, nullable=True)
 
     draft: Mapped["Draft"] = relationship(back_populates="activities")

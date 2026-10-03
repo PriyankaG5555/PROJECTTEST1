@@ -34,7 +34,6 @@ def test_contract_example_sorting_and_totals(logged_in_client: TestClient) -> No
         destinationName="Fort Aguada",
         time="15:00",
         cost=300,
-        priority="medium",
     )
     add_activity(
         logged_in_client,
@@ -42,7 +41,6 @@ def test_contract_example_sorting_and_totals(logged_in_client: TestClient) -> No
         destinationName="Baga Beach",
         time="09:30",
         cost=0,
-        priority="high",
     )
     add_activity(logged_in_client, draft_id, dayNumber=3, destinationName="Falls", cost=6100)
 
@@ -68,7 +66,6 @@ def test_add_activity_returns_contract_shape(logged_in_client: TestClient) -> No
         destinationName="  Baga Beach ",
         time="09:30",
         cost=12.345,
-        priority="high",
     )
 
     assert activity == {
@@ -77,7 +74,6 @@ def test_add_activity_returns_contract_shape(logged_in_client: TestClient) -> No
         "destinationName": "Baga Beach",
         "time": "09:30",
         "cost": 12.35,
-        "priority": "high",
     }
 
 
@@ -86,7 +82,7 @@ def test_optional_fields_default_to_null(logged_in_client: TestClient) -> None:
 
     activity = add_activity(logged_in_client, draft_id)
 
-    assert activity["time"] is None and activity["cost"] is None and activity["priority"] is None
+    assert activity["time"] is None and activity["cost"] is None
 
 
 @pytest.mark.parametrize(
@@ -98,7 +94,6 @@ def test_optional_fields_default_to_null(logged_in_client: TestClient) -> None:
         ({"time": "9:30"}, "time"),
         ({"cost": -1}, "cost"),
         ({"cost": 10_000_001}, "cost"),
-        ({"priority": "urgent"}, "priority"),
         ({"dayNumber": 0}, "dayNumber"),
         ({"dayNumber": 5}, "dayNumber"),  # trip has 4 days
     ],
@@ -117,7 +112,7 @@ def test_activity_validation(
 
 def test_edit_and_move_activity(logged_in_client: TestClient) -> None:
     draft_id = first_draft_id(create_trip(logged_in_client))
-    activity = add_activity(logged_in_client, draft_id, time="09:30", cost=100, priority="low")
+    activity = add_activity(logged_in_client, draft_id, time="09:30", cost=100)
 
     response = logged_in_client.patch(
         f"{API}/activities/{activity['id']}",
@@ -129,7 +124,6 @@ def test_edit_and_move_activity(logged_in_client: TestClient) -> None:
     assert updated["dayNumber"] == 2
     assert updated["time"] is None  # null clears
     assert updated["cost"] == 150
-    assert updated["priority"] == "low"  # omitted -> unchanged
     days = get_draft(logged_in_client, draft_id)["days"]
     assert days[0]["activities"] == [] and len(days[1]["activities"]) == 1
 

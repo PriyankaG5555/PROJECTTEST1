@@ -6,7 +6,6 @@ from typing import Annotated
 
 from pydantic import AfterValidator, Field, StringConstraints
 
-from app.models.enums import Priority
 from app.schemas import ActivityOut, DraftOut, DraftSummaryOut
 from app.schemas.base import ApiModel
 
@@ -53,7 +52,6 @@ class ActivityCreateIn(ApiModel):
     destination_name: DestinationName
     time: Time | None = None
     cost: Cost | None = None
-    priority: Priority | None = None
 
 
 class ActivityUpdateIn(ApiModel):
@@ -63,7 +61,6 @@ class ActivityUpdateIn(ApiModel):
     destination_name: DestinationName | None = None
     time: Time | None = None
     cost: Cost | None = None
-    priority: Priority | None = None
 
 
 class ActivityResponse(ApiModel):

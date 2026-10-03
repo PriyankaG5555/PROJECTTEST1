@@ -4,7 +4,6 @@ import uuid
 from datetime import date
 from decimal import Decimal
 
-from app.models.enums import Priority
 from app.schemas import ActivityOut, DayOut
 
 
@@ -15,7 +14,6 @@ def test_activity_serializes_camel_case_with_money_as_number() -> None:
         destination_name="Baga Beach",
         time="09:30",
         cost=Decimal("1250.50"),  # ORM gives Decimal
-        priority=Priority.HIGH,
     )
 
     data = activity.model_dump(mode="json", by_alias=True)
@@ -23,18 +21,18 @@ def test_activity_serializes_camel_case_with_money_as_number() -> None:
     assert data["dayNumber"] == 1
     assert data["destinationName"] == "Baga Beach"
     assert data["cost"] == 1250.5
-    assert data["priority"] == "high"
+    assert "priority" not in data
     assert "day_number" not in data
 
 
 def test_optional_fields_are_present_as_null() -> None:
     activity = ActivityOut(
-        id=uuid.uuid4(), day_number=2, destination_name="Walk", time=None, cost=None, priority=None
+        id=uuid.uuid4(), day_number=2, destination_name="Walk", time=None, cost=None
     )
 
     data = activity.model_dump(mode="json", by_alias=True)
 
-    assert data["time"] is None and data["cost"] is None and data["priority"] is None
+    assert data["time"] is None and data["cost"] is None
 
 
 def test_day_dates_are_iso_strings() -> None:

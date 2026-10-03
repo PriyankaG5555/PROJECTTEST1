@@ -6,6 +6,8 @@ from app.errors import AppError
 from app.models import Draft, TripStatus
 from app.schemas.drafts import FinalizeIn
 from app.schemas.trips import (
+    SuggestionOut,
+    SuggestionsResponse,
     TripCreateIn,
     TripListResponse,
     TripResponse,
@@ -13,7 +15,7 @@ from app.schemas.trips import (
     TripUpdateResponse,
 )
 from app.security import CurrentUser, DbSession
-from app.services import draft_service, trip_service
+from app.services import draft_service, suggestion_service, trip_service
 from app.services.ownership import get_owned_trip
 from app.services.pdf_service import build_itinerary_pdf, pdf_filename
 
@@ -76,6 +78,14 @@ def export_pdf(trip_id: str, user: CurrentUser, db: DbSession) -> Response:
         pdf,
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/{trip_id}/suggestions", response_model=SuggestionsResponse)
+def get_suggestions(trip_id: str, user: CurrentUser, db: DbSession) -> SuggestionsResponse:
+    trip, places = suggestion_service.suggestions_for(db, user, trip_id)
+    return SuggestionsResponse(
+        suggestions=[SuggestionOut(**p) for p in places], ordered_by=trip.top_priority
     )
 
 

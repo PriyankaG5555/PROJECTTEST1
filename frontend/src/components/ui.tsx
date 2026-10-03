@@ -1,6 +1,6 @@
 // Shared building blocks (frontend-spec.md §4, §8).
 import { useEffect, type ReactNode } from 'react'
-import { PRIORITIES, type Priority, type TripStatus } from '../types'
+import type { TripStatus } from '../types'
 
 export const btn = {
   primary:
@@ -51,19 +51,6 @@ export function StatusBadge({ status }: { status: TripStatus }) {
   )
 }
 
-const prioCls: Record<Priority, string> = {
-  high: 'bg-red-100 text-red-800',
-  medium: 'bg-amber-100 text-amber-800',
-  low: 'bg-slate-200 text-slate-700',
-}
-export function PriorityLabel({ priority }: { priority: Priority | null }) {
-  if (!priority) return null
-  return (
-    <span className={`rounded-md px-1.5 py-px text-[0.7rem] font-bold tracking-wide uppercase ${prioCls[priority]}`}>
-      {PRIORITIES[priority]}
-    </span>
-  )
-}
 
 export function Spinner({ label = 'Loading…' }: { label?: string }) {
   return (
