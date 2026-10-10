@@ -34,7 +34,7 @@ CI then runs `alembic upgrade head` on every push to `main` after tests pass.
 4. Deploy. Every push to `main` redeploys; other branches get preview URLs.
 
 ## Suggestions and "Plan my day"
-Both use free OpenStreetMap data and our own planner — **no API keys or extra setup**. Optional: set `OSM_CONTACT` (email or URL) in Vercel so OpenStreetMap can contact the app owner, as its usage policy asks.
+Both use free Wikipedia + OpenStreetMap data and our own planner — **no API keys or extra setup**. Optional: set `OSM_CONTACT` (email or URL) in Vercel so Nominatim/Wikipedia can contact the app owner, as their usage policies ask.
 
 ## Verify (task 6.5)
 ```

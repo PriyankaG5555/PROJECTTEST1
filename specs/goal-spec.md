@@ -44,7 +44,7 @@
 | US-7d | As a traveller, I want to enter a day's start and end time and ask for a destination-aware suggested plan, including visit durations, so that I can decide what fits into my day. | P1 | G1, G5 |
 | US-7a | As a traveller, I want to choose my trip's **top priority — Time, Destinations or Budget** — so that the app knows what matters most to me when time, places or money run short. | P1 | G1 |
 | US-7b | As a traveller, I want to set an optional total **budget (₹)** for my trip so that I can see how much of it my plan uses and get warned when I go over. | P1 | G1 |
-| US-7c | As a traveller, I want **activity suggestions for my destination** (from OpenStreetMap, free map data) that follow my top priority, so that I can add good places to my plan with one tap. | P1 | G1 |
+| US-7c | As a traveller, I want **activity suggestions for my destination** (from Wikipedia and OpenStreetMap, free open data) that follow my top priority, so that I can add good places to my plan with one tap. | P1 | G1 |
 | US-8 | As a traveller, I want to mark my trip as **Finalized** when I'm done planning so that it is clear which plan is ready to use. | P0 | G3 |
 | US-8a | As a traveller, I want to keep multiple draft versions of the same trip (e.g. "Beach plan" vs "Hills plan") so that I can try different plans before choosing one. | P1 | G1 |
 | US-8b | As a traveller, I want to compare two drafts of a trip side by side (day-by-day activities and total cost) so that I can pick the better plan to finalize. | P2 | G1 |
@@ -76,7 +76,7 @@
   - **Not set:** neutral behaviour — over-budget notice and busy-day flag both shown as gentle notices.
   
   *(US-7a, US-7b)* — The previous per-activity High/Medium/Low label is **removed**.
-- [ ] **F11 — Activity suggestions (P1):** In the planner, the user taps **Get suggestions** to see up to 10 places to visit near the trip's destination from **OpenStreetMap** (free, no API key), ordered according to the trip's top priority, each with name, category, "Free" when known, and a map link. **Add to plan** opens the Add activity form pre-filled with the place name for a chosen day. Results show "© OpenStreetMap contributors". If the map service is unavailable, a friendly message is shown and the rest of the app works normally. *(US-7c)*
+- [ ] **F11 — Activity suggestions (P1):** In the planner, the user taps **Get suggestions** to see up to 10 places to visit near the trip's destination from **Wikipedia, located with OpenStreetMap** (free, no API key), ordered according to the trip's top priority, each with name, category, "Free" when known, and a map link. **Add to plan** opens the Add activity form pre-filled with the place name for a chosen day. Results show "Places: Wikipedia (CC BY-SA) · Location: © OpenStreetMap contributors". If the map service is unavailable, a friendly message is shown and the rest of the app works normally. *(US-7c)*
 - [ ] **F12 — AI-assisted day planning (P1):** For a selected trip day, the traveller sets a start and end time and may provide interests, must-visit places, and places to avoid. The app proposes a time-ordered itinerary with visit durations, using configured LLM and/or destination-place API providers. The traveller reviews and selectively adds suggestions to a draft; generation never changes a draft by itself. See [`ai-feature.md`](ai-feature.md) for provider, privacy, scheduling, and acceptance requirements. *(US-7d)*
 - [ ] **F9 — Multiple drafts (P1):** A trip can have several named draft versions of its plan. The user can create a new draft (blank or copied from an existing one), rename, and delete drafts. Finalizing one draft makes it the trip's Finalized plan; Reopen for editing returns it to Draft. *(US-8a)*
 - [ ] **F10 — Compare drafts (P2):** The user selects two drafts and sees them side by side: activities per day and total cost per day and per trip. *(US-8b)*
@@ -110,7 +110,7 @@
 - **Tech constraints:** Responsive web application that works on common laptop and mobile browsers (latest Chrome, Edge, Safari, Firefox).
 - **Timeline:** 2 weeks for the MVP.
 - **Team:** 1 developer.
-- **Budget / third-party services:** Free/open-source tools and free hosting tiers only. **No paid APIs and no API keys** (decided 2026-10-10): place data comes from OpenStreetMap (Nominatim + Overpass, free with fair-use limits) and day plans from our own rule-based planner.
+- **Budget / third-party services:** Free/open-source tools and free hosting tiers only. **No paid APIs and no API keys** (decided 2026-10-10): place data comes from Wikipedia located with OpenStreetMap Nominatim (free with fair-use limits) and day plans from our own rule-based planner.
 - **Assumptions:**
   - After launch, updates are released about once every 2 months.
   - Each trip belongs to one user; no sharing in MVP.
@@ -127,6 +127,6 @@
   - [x] Follow-up: **Resolved:** one fixed currency, INR.
   - [x] Follow-up: ~~per-activity priority~~ **Changed:** replaced by one **trip-level top priority** (Time / Destinations / Budget) plus an optional trip budget (F8).
 - [x] **Multiple drafts:** **Resolved:** a trip can have multiple drafts (F9, P1) that can be compared side by side (F10, P2); Reopen for editing is kept.
-- [ ] **OpenStreetMap fair use:** public Nominatim/Overpass servers allow light use only (~1 request/second, identifying User-Agent). Mitigated by a 7-day cache per destination and per-user daily limits; switch to a self-hosted or commercial OSM provider if traffic grows. Attribution "© OpenStreetMap contributors" is required.
+- [ ] **Open data fair use:** public Nominatim/Wikipedia APIs allow light use only (~1 request/second, identifying User-Agent). Mitigated by a 7-day cache per destination and per-user daily limits; switch to a self-hosted or commercial OSM provider if traffic grows. Attribution "Places: Wikipedia (CC BY-SA) · Location: © OpenStreetMap contributors" is required.
 - [ ] **AI provider and accuracy:** Select/configure supported providers before enabling AI planning; set spend and request limits. Generated opening hours, travel times, durations, costs, and availability must be identified as estimates unless verified from a destination data source.
 - [ ] **Timeline risk:** 2 weeks with 1 developer is tight; P1 items may slip to post-MVP.

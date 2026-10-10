@@ -19,12 +19,8 @@ class Settings(BaseSettings):
     session_ttl_days: int = Field(default=7, ge=1)
     cookie_secure: bool = True
     log_level: str = "INFO"
-    google_places_api_key: str | None = None
-    # AI day planning (specs/ai-feature.md). No provider configured -> 503 AI_PLANNING_UNAVAILABLE.
-    ai_llm_provider: Literal["anthropic"] | None = None
-    ai_llm_api_key: str | None = None
-    ai_llm_model: str = "claude-opus-5-5"
-    ai_location_provider: Literal["google_places"] | None = "google_places"
+    # Contact sent in the User-Agent to OpenStreetMap services (their usage policy asks for it).
+    osm_contact: str = "https://ghumakkadyatri.vercel.app"
     ai_plan_daily_limit: int = Field(default=10, ge=1)
 
     @property

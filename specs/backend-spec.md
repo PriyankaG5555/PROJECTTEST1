@@ -12,7 +12,7 @@
 - **PDF generation:** **ReportLab** + `svglib` (logo) with embedded Poppins/Inter TTF fonts (both include the `₹` glyph). Pure Python — no headless browser.
 - **Rate limiting:** Stored in PostgreSQL (`auth_attempts` table) — in-memory limiters don't work on serverless, where each request may hit a different instance.
 - **Logging:** Python `logging` with a JSON formatter (`python-json-logger`)
-- **External services / APIs:** **OpenStreetMap** — Nominatim (geocoding) and Overpass API (places), free and keyless, called server-side with Python's standard HTTP client and an identifying User-Agent; results cached 7 days. **No API keys, no LLM.** See §7.
+- **External services / APIs:** **OpenStreetMap Nominatim** (geocoding) and **Wikipedia API** (GeoSearch + categories for places), free and keyless, called server-side with Python's standard HTTP client and an identifying User-Agent; results cached 7 days. **No API keys, no LLM.** See §7.
 - **Testing:** pytest + FastAPI `TestClient` (`httpx2`) against a separate test PostgreSQL database; `ruff` (lint/format) and `mypy` (type-check)
 
 ## 2. Architecture Overview
@@ -117,7 +117,7 @@ Index: (`draft_id`, `day_number`, `time`) for loading a draft in display order.
 | Field | Type | Constraints | Description |
 |-------|------|-------------|-------------|
 | destination_key | VARCHAR(100) | PK | Lower-case trimmed destination |
-| places | JSONB | NOT NULL | Normalised places (id, name, category, lat, lon, notability, free, address, url) |
+| places | JSONB | NOT NULL | Normalised places (id, name, category, lat, lon, notability, free, address, url, wiki_url) |
 | fetched_at | TIMESTAMPTZ | NOT NULL | Entries older than 7 days are refreshed |
 
 ### Entity: AuthAttempt (`auth_attempts`) — rate limiting
@@ -171,7 +171,7 @@ Rows older than 1 hour are deleted opportunistically on each auth request.
 | Service | Purpose | Failure / fallback behavior |
 |---------|---------|-----------------------------|
 | PostgreSQL (Neon) | Data storage | DB unavailable → `500 INTERNAL_ERROR`; `/health` returns `503 { "status": "degraded" }` |
-| OpenStreetMap — Nominatim `GET https://nominatim.openstreetmap.org/search` and Overpass `POST https://overpass-api.de/api/interpreter` | Places for suggestions (F11) and day plans (F12): attractions within 15 km of the destination (see ai-feature.md §5). One Nominatim + one Overpass call per destination per 7 days (cached in `place_cache`). Per-user limits: 30 suggestions/day, 10 plans/day. Attribution "© OpenStreetMap contributors". | Timeout (20 s) or error → `503 SUGGESTIONS_UNAVAILABLE` / `503 AI_PLANNING_UNAVAILABLE`; destination not found → empty suggestions / must-visit-only plan with a warning |
+| Nominatim `GET https://nominatim.openstreetmap.org/search` and Wikipedia `GET https://en.wikipedia.org/w/api.php` | Places for suggestions (F11) and day plans (F12): notable attractions around the destination (see ai-feature.md §5). About 2–17 requests per destination per 7 days (cached in `place_cache`). Per-user limits: 30 suggestions/day, 10 plans/day. Attribution "Places: Wikipedia (CC BY-SA) · Location: © OpenStreetMap contributors". | Timeout (15 s) or error → `503 SUGGESTIONS_UNAVAILABLE` / `503 AI_PLANNING_UNAVAILABLE`; destination not found → empty suggestions / must-visit-only plan with a warning |
 | Rule-based planner (`planner_service`, our code) | Ranks and schedules OSM places for F12 (ai-feature.md §5). No external AI service. | — |
 
 ## 8. Configuration & Environment
@@ -184,7 +184,7 @@ Rows older than 1 hour are deleted opportunistically on each auth request.
 | `COOKIE_SECURE` | Set `Secure` on cookie (`false` only for local http) | No | `true` |
 | `LOG_LEVEL` | Logging level | No | `INFO` |
 | `TEST_DATABASE_URL` | Test database for `pytest` (Neon `test` branch). **Wiped on every test run**; must differ from `DATABASE_URL`. Local only. | For DB tests | — |
-| `OSM_CONTACT` | Contact (email or URL) included in the User-Agent sent to OpenStreetMap services, as their usage policy asks | No | `https://ghumakkadyatri.vercel.app` |
+| `OSM_CONTACT` | Contact (email or URL) included in the User-Agent sent to Nominatim and Wikipedia, as their usage policy asks | No | `https://ghumakkadyatri.vercel.app` |
 | `AI_PLAN_DAILY_LIMIT` | Maximum AI plan-generation requests per user per UTC day. | No | `10` |
 | `MIGRATION_DATABASE_URL` | Direct (non-pooled) Neon URL for Alembic; falls back to `DATABASE_URL` | No | — |
 
@@ -246,7 +246,7 @@ PROJECTTEST1/
         draft_service.py
         activity_service.py
         ai_planning_service.py
-        osm_service.py     # Nominatim + Overpass, cached in place_cache
+        osm_service.py     # Nominatim + Wikipedia places, cached in place_cache
         planner_service.py # rule-based ranking and scheduling (no LLM)
         pdf_service.py
         ownership.py      # get_owned_*, assert_editable

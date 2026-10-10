@@ -40,6 +40,7 @@ from sqlalchemy.orm import Session  # noqa: E402
 
 from app.db import get_engine, get_sessionmaker  # noqa: E402
 from app.main import app  # noqa: E402
+from tests.osm_fixtures import osm  # noqa: E402, F401  (shared fixture)
 
 
 def alembic_config() -> Config:
@@ -60,7 +61,7 @@ def migrated_db() -> None:
 def db(migrated_db: None) -> Iterator[Session]:
     """A session on an empty database."""
     with get_engine().begin() as conn:
-        conn.execute(text("TRUNCATE users, auth_attempts CASCADE"))
+        conn.execute(text("TRUNCATE users, auth_attempts, place_cache CASCADE"))
     session = get_sessionmaker()()
     try:
         yield session

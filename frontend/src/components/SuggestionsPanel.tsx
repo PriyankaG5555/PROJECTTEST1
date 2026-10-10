@@ -12,15 +12,16 @@ const PRICE: Record<string, string> = {
 }
 
 const ORDER_NOTE: Record<TopPriority, string> = {
-  budget: 'cheapest first',
-  destinations: 'must-see first',
-  time: 'best-rated first',
+  budget: 'free places first',
+  destinations: 'most notable first',
+  time: 'most notable first',
 }
 
 /** Google Places suggestions for the trip destination (goal-spec F11, contract §5). */
 export default function SuggestionsPanel(props: { trip: TripDetail; readOnly: boolean; onAdd: (name: string) => void }) {
   const { trip } = props
   const [items, setItems] = useState<Suggestion[] | null>(null)
+  const [attribution, setAttribution] = useState('')
   const [error, setError] = useState<string>()
   const [busy, setBusy] = useState(false)
 
@@ -28,8 +29,9 @@ export default function SuggestionsPanel(props: { trip: TripDetail; readOnly: bo
     setBusy(true)
     setError(undefined)
     try {
-      const res = await api<{ suggestions: Suggestion[] }>(`/trips/${trip.id}/suggestions`)
+      const res = await api<{ suggestions: Suggestion[]; attribution: string }>(`/trips/${trip.id}/suggestions`)
       setItems(res.suggestions)
+      setAttribution(res.attribution)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong.')
     } finally {
@@ -53,7 +55,7 @@ export default function SuggestionsPanel(props: { trip: TripDetail; readOnly: bo
         </button>
       </div>
       {error && <p className="text-sm text-red-700" role="alert">{error}</p>}
-      {items?.length === 0 && <p className="text-sm text-slate-600">No suggestions found for this destination.</p>}
+      {items?.length === 0 && <p className="text-sm text-slate-600">No well-known places found near this destination.</p>}
       {!!items?.length && (
         <>
           <ul className="grid gap-2 sm:grid-cols-2">
@@ -62,6 +64,7 @@ export default function SuggestionsPanel(props: { trip: TripDetail; readOnly: bo
                 <div className="grid min-w-0 flex-1 gap-0.5">
                   <span className="font-medium break-words">{s.name}</span>
                   <span className="flex flex-wrap gap-x-3 text-sm text-slate-600">
+                    {s.category && <span>{s.category}</span>}
                     {s.rating !== null && (
                       <span>
                         ★ {s.rating.toFixed(1)}
@@ -84,7 +87,7 @@ export default function SuggestionsPanel(props: { trip: TripDetail; readOnly: bo
               </li>
             ))}
           </ul>
-          <p className="text-xs text-slate-500">Powered by Google</p>
+          <p className="text-xs text-slate-500">{attribution}</p>
         </>
       )}
     </section>

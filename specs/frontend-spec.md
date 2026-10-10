@@ -99,7 +99,7 @@
 | `AIPlanningPanel` | Collect time window and bounded planning preferences; request a day proposal | `trip`, `draft`, `day`, `readOnly` | Trip Planner |
 | `AIPlanPreview` | Review/select proposed activities; display duration, derived end time, source, attribution, and warnings; apply selected items | `proposal`, `onApply` | AIPlanningPanel |
 | `BudgetBar` | Planned cost vs budget; red when over budget and priority is Budget, gentle notice otherwise | `planned`, `budget`, `topPriority` | Planner header |
-| `SuggestionsPanel` | Get suggestions → list (name, category, "Free" when known, map link) + **Add to plan** (opens ActivityForm pre-filled, pick a day); shows "© OpenStreetMap contributors" | `trip` | Trip Planner |
+| `SuggestionsPanel` | Get suggestions → list (name, category, "Free" when known, map link) + **Add to plan** (opens ActivityForm pre-filled, pick a day); shows the API's `attribution` text (Wikipedia + OpenStreetMap) | `trip` | Trip Planner |
 | `CostTotal` | Formats INR amount (₹1,250) | `amount` | DayColumn, PlannerHeader, Compare |
 | `ConfirmDialog` | Confirm finalize / reopen / delete | `title`, `message`, `onConfirm` | Several |
 | `EmptyState` / `ErrorState` / `LoadingSpinner` | Standard empty, error and loading displays | `message`, `onRetry?` | All pages |
