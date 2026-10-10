@@ -4,6 +4,7 @@ from fastapi import APIRouter, Response, status
 
 from app.errors import AppError
 from app.models import Draft, TripStatus
+from app.schemas.ai_planning import AIPlanIn, AIPlanOut
 from app.schemas.drafts import FinalizeIn
 from app.schemas.trips import (
     SuggestionOut,
@@ -15,7 +16,7 @@ from app.schemas.trips import (
     TripUpdateResponse,
 )
 from app.security import CurrentUser, DbSession
-from app.services import draft_service, suggestion_service, trip_service
+from app.services import ai_planning_service, draft_service, suggestion_service, trip_service
 from app.services.ownership import get_owned_trip
 from app.services.pdf_service import build_itinerary_pdf, pdf_filename
 
@@ -79,6 +80,11 @@ def export_pdf(trip_id: str, user: CurrentUser, db: DbSession) -> Response:
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.post("/{trip_id}/ai-plans", response_model=AIPlanOut)
+def generate_ai_plan(trip_id: str, body: AIPlanIn, user: CurrentUser, db: DbSession) -> AIPlanOut:
+    return ai_planning_service.generate(db, user, trip_id, body)
 
 
 @router.get("/{trip_id}/suggestions", response_model=SuggestionsResponse)

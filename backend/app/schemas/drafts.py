@@ -15,6 +15,7 @@ DestinationName = Annotated[
 ]
 Time = Annotated[str, StringConstraints(pattern=r"^([01][0-9]|2[0-3]):[0-5][0-9]$")]
 DayNumber = Annotated[int, Field(ge=1, le=30)]
+DurationMinutes = Annotated[int, Field(ge=1, le=1440)]
 
 
 def _round_cost(value: Decimal) -> Decimal:
@@ -51,6 +52,7 @@ class ActivityCreateIn(ApiModel):
     day_number: DayNumber
     destination_name: DestinationName
     time: Time | None = None
+    duration_minutes: DurationMinutes | None = None
     cost: Cost | None = None
 
 
@@ -60,6 +62,7 @@ class ActivityUpdateIn(ApiModel):
     day_number: DayNumber | None = None
     destination_name: DestinationName | None = None
     time: Time | None = None
+    duration_minutes: DurationMinutes | None = None
     cost: Cost | None = None
 
 

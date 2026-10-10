@@ -243,7 +243,7 @@ PROJECTTEST1/
         draft_service.py
         activity_service.py
         ai_planning_service.py
-        ai_providers/      # fixed provider adapters; no caller-supplied endpoints
+        ai_providers.py    # fixed provider adapters (Anthropic Claude); no caller-supplied endpoints
         pdf_service.py
         ownership.py      # get_owned_*, assert_editable
       utils/

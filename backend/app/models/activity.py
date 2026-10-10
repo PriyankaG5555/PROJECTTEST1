@@ -18,6 +18,7 @@ class Activity(UUIDPrimaryKey, Timestamps, Base):
         CheckConstraint("day_number BETWEEN 1 AND 30", name="day_number_range"),
         CheckConstraint("time ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'", name="time_format"),
         CheckConstraint("cost >= 0", name="cost_not_negative"),
+        CheckConstraint("duration_minutes BETWEEN 1 AND 1440", name="duration_range"),
         Index("ix_activities_draft_day_time", "draft_id", "day_number", "time"),
     )
 
@@ -28,5 +29,6 @@ class Activity(UUIDPrimaryKey, Timestamps, Base):
     destination_name: Mapped[str] = mapped_column(String(100), nullable=False)
     time: Mapped[str | None] = mapped_column(CHAR(5), nullable=True)
     cost: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    duration_minutes: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
 
     draft: Mapped["Draft"] = relationship(back_populates="activities")

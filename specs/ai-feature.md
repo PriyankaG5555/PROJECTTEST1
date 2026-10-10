@@ -100,7 +100,7 @@ The feature is unavailable for finalized trips. Reopening the trip restores the 
 13. Automated tests use fake providers only; CI never calls real LLM or Google APIs.
 
 ## 9. Open Questions
-- [ ] **First LLM adapter:** which provider ships first? *Recommendation:* Anthropic Claude (`claude-sonnet-5-5`, good structured output at moderate cost) behind the vendor-neutral adapter. Needs an API key with billing; set a monthly spend limit.
+- [x] **First LLM adapter:** **Built:** Anthropic Claude, default model `claude-opus-5-5` (configurable via `AI_LLM_MODEL`), structured output + server-side refusal fallback. Needs an Anthropic API key with billing; set a monthly spend limit.
 - [ ] **Location source for AI plans:** reuse Google Places (already integrated, F11) as the first location adapter?
 - [ ] **Daily limit:** is 10 AI plans per user per day right for launch?
 

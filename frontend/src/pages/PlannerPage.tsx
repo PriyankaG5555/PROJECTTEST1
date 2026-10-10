@@ -2,13 +2,14 @@ import { useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { api, exportPdfUrl } from '../api/client'
 import { useDraft, useRefreshData, useTrip } from '../api/queries'
+import AIPlanModal from '../components/AIPlanModal'
 import ActivityModal from '../components/ActivityModal'
 import DraftSwitcher from '../components/DraftSwitcher'
 import SuggestionsPanel from '../components/SuggestionsPanel'
 import { useToast } from '../components/toast'
 import { ConfirmDialog, ErrorState, Spinner, StatusBadge, btn, card } from '../components/ui'
 import { BUSY_DAY_ACTIVITIES, TOP_PRIORITIES, TRIP_TYPES, type Activity, type Day, type TopPriority } from '../types'
-import { inr, longDate } from '../utils/format'
+import { durationLabel, endTime, inr, longDate } from '../utils/format'
 
 type Confirm = { kind: 'finalize' | 'reopen' } | { kind: 'delete-activity'; activity: Activity } | null
 
@@ -22,6 +23,7 @@ export default function PlannerPage() {
   const toast = useToast()
   const [editing, setEditing] = useState<{ day: number; activity?: Activity; name?: string; chooseDay?: boolean } | null>(null)
   const [confirm, setConfirm] = useState<Confirm>(null)
+  const [aiDay, setAiDay] = useState<Day | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string>()
 
@@ -110,10 +112,17 @@ export default function PlannerPage() {
           {draft.data.days.map((day) => (
             <DayCard key={day.dayNumber} day={day} readOnly={readOnly} timeFirst={t.topPriority === 'time'}
               onAdd={() => setEditing({ day: day.dayNumber })}
+              onPlanAI={() => setAiDay(day)}
               onEdit={(a) => setEditing({ day: day.dayNumber, activity: a })}
               onDelete={(a) => setConfirm({ kind: 'delete-activity', activity: a })} />
           ))}
         </div>
+      )}
+
+      {aiDay && draftId && (
+        <AIPlanModal tripId={t.id} draftId={draftId} dayNumber={aiDay.dayNumber} dateLabel={longDate(aiDay.date)}
+          onClose={() => setAiDay(null)}
+          onApplied={async (msg) => { setAiDay(null); await changed(msg) }} />
       )}
 
       <SuggestionsPanel trip={t} readOnly={readOnly}
@@ -179,6 +188,7 @@ function DayCard(props: {
   readOnly: boolean
   timeFirst: boolean
   onAdd: () => void
+  onPlanAI: () => void
   onEdit: (a: Activity) => void
   onDelete: (a: Activity) => void
 }) {
@@ -210,6 +220,9 @@ function DayCard(props: {
               <span className="grid min-w-0 gap-0.5">
                 <span className="font-medium break-words">{a.destinationName}</span>
                 <span className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+                  {a.time && a.durationMinutes !== null && (
+                    <span className="tabular-nums">until {endTime(a.time, a.durationMinutes)} · {durationLabel(a.durationMinutes)}</span>
+                  )}
                   {a.cost !== null && <span className="tabular-nums">{inr(a.cost)}</span>}
                 </span>
               </span>
@@ -224,7 +237,12 @@ function DayCard(props: {
         </ul>
       )}
       <footer className="flex items-center justify-between gap-2 px-4 pt-2 pb-3 text-sm">
-        {readOnly ? <span /> : <button className={btn.ghost + ' !px-3 !py-1.5'} onClick={props.onAdd}>+ Add activity</button>}
+        {readOnly ? <span /> : (
+          <span className="flex flex-wrap gap-1.5">
+            <button className={btn.ghost + ' !px-3 !py-1.5'} onClick={props.onAdd}>+ Add activity</button>
+            <button className={btn.text} onClick={props.onPlanAI}>✨ Plan with AI</button>
+          </span>
+        )}
         <span className="font-display font-semibold tabular-nums">{inr(day.totalCost)}</span>
       </footer>
     </section>

@@ -9,4 +9,5 @@ bcrypt>=5.0,<6
 PyJWT>=2.15,<3
 reportlab>=5.0,<6
 svglib>=2.2,<3
+anthropic>=1.13,<2
 python-json-logger>=4.2,<5
