@@ -12,7 +12,7 @@
 - **PDF generation:** **ReportLab** + `svglib` (logo) with embedded Poppins/Inter TTF fonts (both include the `₹` glyph). Pure Python — no headless browser.
 - **Rate limiting:** Stored in PostgreSQL (`auth_attempts` table) — in-memory limiters don't work on serverless, where each request may hit a different instance.
 - **Logging:** Python `logging` with a JSON formatter (`python-json-logger`)
-- **External services / APIs:** **Google Places API (New)** — Text Search, called server-side with `httpx` (the key is never sent to the browser). See §7.
+- **External services / APIs:** **Google Places API (New)** — Text Search, called server-side with `httpx` (the key is never sent to the browser); configurable LLM and location-provider adapters for AI day planning. See §7.
 - **Testing:** pytest + FastAPI `TestClient` (`httpx2`) against a separate test PostgreSQL database; `ruff` (lint/format) and `mypy` (type-check)
 
 ## 2. Architecture Overview
@@ -86,6 +86,7 @@ models/        → SQLAlchemy ORM models → PostgreSQL
 | destination_name | VARCHAR(100) | NOT NULL | |
 | time | CHAR(5) | NULL, CHECK matches `HH:mm` | Stored as text; sorts correctly as a string |
 | cost | NUMERIC(12,2) | NULL, CHECK `>= 0` | INR |
+| duration_minutes | SMALLINT | NULL, CHECK 1–1440 | Planned visit duration; existing activities remain `NULL` |
 | created_at | TIMESTAMPTZ | NOT NULL | Tie-breaker for ordering |
 | updated_at | TIMESTAMPTZ | NOT NULL | |
 
@@ -97,6 +98,20 @@ Index: (`draft_id`, `day_number`, `time`) for loading a draft in display order.
 | user_id | UUID | PK, FK → users.id ON DELETE CASCADE | |
 | day | DATE | PK | UTC day |
 | count | INTEGER | NOT NULL | Requests that day (limit 30) |
+
+### Entity: AIPlanUsage (`ai_plan_usage`) — per-user daily limit for AI planning
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| user_id | UUID | PK, FK → users.id ON DELETE CASCADE | |
+| day | DATE | PK | UTC day |
+| count | INTEGER | NOT NULL | Generation requests that day; default limit 10, configurable |
+
+### Entity: AIPlanApplication (`ai_plan_applications`) — single-use AI proposal tokens
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| proposal_id | UUID | PK | ID bound into the signed proposal token |
+| user_id | UUID | FK → users.id ON DELETE CASCADE | Token owner |
+| applied_at | TIMESTAMPTZ | NOT NULL | Prevents applying the same proposal more than once |
 
 ### Entity: AuthAttempt (`auth_attempts`) — rate limiting
 | Field | Type | Constraints | Description |
@@ -112,6 +127,7 @@ Rows older than 1 hour are deleted opportunistically on each auth request.
 - Trip 1 — * Draft (1 to 5 drafts; at least one always exists)
 - Draft 1 — * Activity
 - Trip 0..1 → Draft (`finalized_draft_id`, the draft the trip was finalized from)
+- User 1 — * AIPlanUsage and AIPlanApplication
 
 ## 4. Business Logic / Services
 | Service | Responsibility | Rules / edge cases |
@@ -125,8 +141,9 @@ Rows older than 1 hour are deleted opportunistically on each auth request.
 | `trip_service.finalize` | Draft → Finalized | `TRIP_FINALIZED` if already finalized; `draftId` must belong to the trip (else `VALIDATION_ERROR`). Sets `status`, `finalized_draft_id`. Empty drafts may be finalized. |
 | `trip_service.reopen` | Finalized → Draft | `TRIP_NOT_FINALIZED` if draft. Clears `finalized_draft_id`. |
 | `draft_service` | Create, get, rename, delete drafts | Finalized lock on all writes. Max 5 per trip → `DRAFT_LIMIT_REACHED`. Name unique per trip (case-insensitive) → `DRAFT_NAME_TAKEN`. Copy duplicates all activities in one transaction. Deleting the only draft → `LAST_DRAFT`. `get` builds Day 1…N (including empty days), sorts activities by `time` (nulls last, then `created_at`), computes day and draft totals. |
-| `activity_service` | Add, edit, delete activities | Ownership via draft → trip → user. Finalized lock. `dayNumber` must be 1…`dayCount`. Trims strings; rounds cost to 2 decimals (`Decimal`, never float). |
-| `pdf_service` | Itinerary PDF | `TRIP_NOT_FINALIZED` unless finalized. Uses the finalized draft. A4 portrait: logo + trip header (destination, dates, trip type, day count), then each day (date heading, activities as table rows: time, destination name, priority label, cost), day total, and the trip total at the end. Empty days show "No activities planned". Costs formatted `₹1,250.00` (Indian grouping). Built in memory and returned as `application/pdf`. |
+| `ai_planning_service` | Generate and apply day-plan proposals | Uses the selected draft and trip context; validates bounded inputs, window, output (maximum 10 proposals), durations, schedule conflicts and provider data; issues short-lived signed tokens (`typ=ai_plan_proposal`, 15-minute expiry) containing canonical activity fields; enforces per-user limits and finalized lock. Applying selected token items is single-use and transactional. Never persists provider responses or unselected proposals. |
+| `activity_service` | Add, edit, delete activities | Ownership via draft → trip → user. Finalized lock. `dayNumber` must be 1…`dayCount`. Trims strings; rounds cost to 2 decimals (`Decimal`, never float). `duration_minutes` is optional; when present, `time` is required and the derived end time must be no later than 24:00. |
+| `pdf_service` | Itinerary PDF | `TRIP_NOT_FINALIZED` unless finalized. Uses the finalized draft. A4 portrait: logo + trip header (destination, dates, trip type, day count), then each day (date heading, activities as table rows: time, destination name, duration/derived end time when set, cost), day total, and the trip total at the end. Empty days show "No activities planned". Costs formatted `₹1,250.00` (Indian grouping). Built in memory and returned as `application/pdf`. |
 | **Ownership helpers** | `get_owned_trip(db, trip_id, user)` / `get_owned_draft` / `get_owned_activity` | Single place that raises `NOT_FOUND` for missing **or** other users' resources. Used by every service. |
 | **Finalized lock helper** | `assert_editable(trip)` | Raises `TRIP_FINALIZED` when `status = finalized`. Called before every write except reopen and delete. |
 
@@ -139,6 +156,7 @@ Rows older than 1 hour are deleted opportunistically on each auth request.
 
 ## 6. Validation & Error Handling
 - **Input validation approach:** Pydantic model per endpoint (body, path, query). Extra fields are ignored. Failures → `400 VALIDATION_ERROR` with `details.fields`. Database constraints (CHECK, UNIQUE) are a second safety net.
+- **AI provider output:** Treat all provider output as untrusted. Validate against bounded schemas and schedule rules before signing a proposal; reject malformed output with `503 AI_PLANNING_UNAVAILABLE`. Increment the database-backed per-user generation limit before making provider calls.
 - **Error response format:** Exactly as `api-contract-spec.md` §2. SQLAlchemy `IntegrityError` on unique constraints is mapped to `USERNAME_TAKEN` / `DRAFT_NAME_TAKEN`.
 - **Logging:** One JSON log line per request (method, path, status, duration, request ID, user ID if any). Errors logged with tracebacks. **Never log** passwords, cookies, or JWTs.
 
@@ -147,6 +165,7 @@ Rows older than 1 hour are deleted opportunistically on each auth request.
 |---------|---------|-----------------------------|
 | PostgreSQL (Neon) | Data storage | DB unavailable → `500 INTERNAL_ERROR`; `/health` returns `503 { "status": "degraded" }` |
 | Google Places API (New) — `POST https://places.googleapis.com/v1/places:searchText` | Activity suggestions (F11). Query `top attractions in {destination}`, `maxResultCount` 10, field mask `places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.priceLevel,places.googleMapsUri` (only what we show, to limit cost). Results re-ordered by trip priority; never stored (Google terms). Limit 30 requests per user per day. | Key missing, timeout (8 s), error or quota → `503 SUGGESTIONS_UNAVAILABLE`; the rest of the app is unaffected |
+| Configured AI planning providers | AI day proposals (F12). Server-side adapter selects configured supported location-data providers based on destination coverage and may use a configured LLM for bounded travel ranking/scheduling. Ground places and factual claims in provider data. Limit requests per user per day; validate structured output and attribution; never store provider responses or send account identifiers. | No suitable provider, timeout, quota or invalid provider response → explicit `503 AI_PLANNING_UNAVAILABLE`; manual planner remains available |
 
 ## 8. Configuration & Environment
 | Variable | Description | Required | Default |
@@ -159,6 +178,11 @@ Rows older than 1 hour are deleted opportunistically on each auth request.
 | `LOG_LEVEL` | Logging level | No | `INFO` |
 | `TEST_DATABASE_URL` | Test database for `pytest` (Neon `test` branch). **Wiped on every test run**; must differ from `DATABASE_URL`. Local only. | For DB tests | — |
 | `GOOGLE_PLACES_API_KEY` | Google Cloud API key restricted to the Places API (New). Without it, suggestions return 503 | No | — |
+| `AI_LLM_PROVIDER` | Name of a supported server-side LLM adapter. Optional; only trusted deployment configuration selects providers. | No | — |
+| `AI_LLM_API_KEY` | Credential for the configured LLM; never exposed to the browser or logged. | No | — |
+| `AI_LLM_MODEL` | Supported model identifier for the configured LLM adapter. | No | — |
+| `AI_LOCATION_PROVIDER` | Optional supported location-data adapter, selected based on destination coverage. Existing Google Places integration can be reused; its key remains `GOOGLE_PLACES_API_KEY`. | No | — |
+| `AI_PLAN_DAILY_LIMIT` | Maximum AI plan-generation requests per user per UTC day. | No | `10` |
 | `MIGRATION_DATABASE_URL` | Direct (non-pooled) Neon URL for Alembic; falls back to `DATABASE_URL` | No | — |
 
 Settings are loaded and validated with `pydantic-settings`. `backend/.env.example` lists all variables with safe placeholder values; real `.env` files are git-ignored. In production, variables are set in the Vercel project settings.
@@ -203,20 +227,23 @@ PROJECTTEST1/
       security.py         # bcrypt, JWT, cookie helpers, get_current_user
       errors.py           # AppError + exception handlers
       middleware.py       # request ID, JSON access log, security headers, body limit
-      models/             # SQLAlchemy models: user, trip, draft, activity, auth_attempt
-      schemas/            # Pydantic models (camelCase aliases)
+      models/             # SQLAlchemy models: user, trip, draft, activity, auth_attempt, AI usage/application
+      schemas/            # Pydantic models (camelCase aliases), including AI plan schemas
       routers/
         health.py
         auth.py
         trips.py
         drafts.py
         activities.py
+        ai_planning.py
       services/
         auth_service.py
         rate_limit.py
         trip_service.py
         draft_service.py
         activity_service.py
+        ai_planning_service.py
+        ai_providers/      # fixed provider adapters; no caller-supplied endpoints
         pdf_service.py
         ownership.py      # get_owned_*, assert_editable
       utils/
@@ -230,6 +257,7 @@ PROJECTTEST1/
       test_trips.py
       test_drafts.py
       test_activities.py
+      test_ai_planning.py
       test_export.py
 ```
 

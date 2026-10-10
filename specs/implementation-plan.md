@@ -76,7 +76,7 @@
 | # | Task | Spec | Done when |
 |---|------|------|-----------|
 | 5.1 | Add fonts (Poppins, Inter) and logo to `backend/assets/` | BE §1, §10 | Files present (fonts under OFL licence) |
-| 5.2 | `pdf_service` layout: header with logo, per-day tables, priority labels, day totals, trip total in `₹` | BE §4; US-9 | PDF opens, `₹` renders, empty days say "No activities planned" |
+| 5.2 | `pdf_service` layout: header with logo, per-day tables, visit duration/end time when set, day totals, trip total in `₹` | BE §4; US-9 | PDF opens, `₹` renders, durations are shown when present, empty days say "No activities planned" |
 | 5.3 | `GET /trips/{id}/export.pdf` with filename rule; `409 TRIP_NOT_FINALIZED` for drafts | API §5 | Tests: content type, filename, draft trip → 409; 30-day trip < 3 s |
 
 ## Phase 6 — First deployment (Day 5–6)
