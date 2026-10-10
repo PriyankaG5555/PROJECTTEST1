@@ -13,18 +13,19 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db import get_engine
 from app.errors import AppError, not_found, validation_error
-from app.models import Activity, AIPlanApplication, AIPlanUsage, Draft, Trip, User
+from app.models import Activity, AIPlanApplication, AIPlanUsage, Draft, User
 from app.schemas.ai_planning import AIPlanIn, AIPlanItemOut, AIPlanOut, BulkApplyIn
-from app.services import ai_providers, suggestion_service
+from app.services import osm_service, planner_service
 from app.services.draft_service import touch
 from app.services.ownership import assert_editable, get_owned_draft, get_owned_trip
 
 TOKEN_TYPE = "ai_proposal"
 TOKEN_TTL = timedelta(minutes=15)
-MAX_ITEMS = 10
-MIN_DURATION, MAX_DURATION = 15, 600
-TRAVEL_WARNING = "Travel time between places is not verified — leave extra time to move around."
-DURATION_NOTE = "Visit durations are AI estimates. Check opening hours and prices with each place."
+TRAVEL_WARNING = (
+    "Travel times are estimated from straight-line distance (about 25 km/h plus 10 minutes) "
+    "— check routes before you go."
+)
+DURATION_NOTE = "Visit durations are estimates. Check opening hours and prices with each place."
 
 Interval = tuple[int, int]
 
@@ -41,7 +42,8 @@ def unavailable() -> AppError:
     return AppError(
         "AI_PLANNING_UNAVAILABLE",
         503,
-        "AI planning isn't available right now. You can still add activities yourself.",
+        "Day planning isn't available right now (map data didn't respond). "
+        "You can still add activities yourself.",
     )
 
 
@@ -105,18 +107,22 @@ def _count_request(user: User, limit: int) -> None:
         )
 
 
-def _candidates(trip: Trip, data: AIPlanIn) -> list[dict[str, Any]]:
-    settings = get_settings()
-    if settings.ai_location_provider != "google_places" or not settings.google_places_api_key:
-        return []  # only the traveller's must-visit names can be scheduled (unverified)
-    query = trip.destination + (f" {', '.join(data.interests)}" if data.interests else "")
-    try:
-        raw = suggestion_service.fetch_places(query, settings.google_places_api_key)
-    except (OSError, ValueError) as exc:  # URLError and timeouts are OSErrors
-        raise unavailable() from exc
-    avoid = [a.lower() for a in data.avoid]
-    places = [suggestion_service.normalize(p) for p in raw if p.get("displayName")]
-    return [p for p in places if not any(a in p["name"].lower() for a in avoid)]
+def _with_must_visit_places(
+    places: list[dict[str, Any]], destination: str, must_visit: list[str]
+) -> list[dict[str, Any]]:
+    """Look up must-visit places that are not among the destination's places (best effort)."""
+    extra: list[dict[str, Any]] = []
+    for name in must_visit:
+        low = name.lower()
+        if any(low in p["name"].lower() or p["name"].lower() in low for p in places + extra):
+            continue
+        try:
+            found = osm_service.lookup_place(name, destination, places)
+        except osm_service.OSMUnavailable:
+            continue  # stays an unverified must-visit place
+        if found is not None:
+            extra.append(found)
+    return places + extra
 
 
 # ---------- Generate ----------
@@ -132,42 +138,54 @@ def generate(db: Session, user: User, trip_id: str, data: AIPlanIn) -> AIPlanOut
     if window[1] <= window[0]:
         raise validation_error("endTime", "End time must be after the start time.")
 
-    settings = get_settings()
-    if settings.ai_llm_provider is None or not settings.ai_llm_api_key:
-        raise unavailable()
-    _count_request(user, settings.ai_plan_daily_limit)
-
+    _count_request(user, get_settings().ai_plan_daily_limit)
     busy, warnings = busy_intervals(_day_activities(db, draft.id, data.day_number), window)
-    candidates = _candidates(trip, data)
-    context = {
-        "destination": trip.destination,
-        "date": (trip.start_date + timedelta(days=data.day_number - 1)).isoformat(),
-        "time_window": {"start": data.start_time, "end": data.end_time},
-        "fixed_busy_blocks": [{"start": _hhmm(s), "end": _hhmm(e)} for s, e in busy],
-        "candidates": [
-            {
-                "candidate_index": i,
-                "name": c["name"],
-                "rating": c["rating"],
-                "price_level": c["price_level"],
-            }
-            for i, c in enumerate(candidates)
-        ],
-        "must_visit": data.must_visit,
-        "interests": data.interests,
-        "top_priority": trip.top_priority.value if trip.top_priority else None,
-        "budget_inr": float(trip.budget) if trip.budget is not None else None,
-    }
     try:
-        plan = ai_providers.plan_with_llm(context)
-    except ai_providers.ProviderUnavailable:
+        places = osm_service.places_for(db, trip.destination)
+    except osm_service.OSMUnavailable:
         raise unavailable() from None
-
-    items = _validate_plan(plan, candidates, data, window, busy)
+    places = _with_must_visit_places(places, trip.destination, data.must_visit)
+    if not places:
+        warnings.append(
+            f"We couldn't find places for “{trip.destination}” on the map, so only your "
+            "must-visit places can be planned."
+        )
+    plan = planner_service.plan_day(
+        places,
+        must_visit=data.must_visit,
+        avoid=data.avoid,
+        interests=data.interests,
+        priority=trip.top_priority,
+        window=window,
+        busy=busy,
+    )
+    warnings.extend(plan.warnings)
+    items = [
+        AIPlanItemOut(
+            item_id=f"item-{n}",
+            destination_name=i.name[:100],
+            time=_hhmm(i.start),
+            duration_minutes=i.duration,
+            cost=None,  # the planner never sets or estimates costs
+            place_id=i.place["place_id"] if i.place else None,
+            verified=i.place is not None,
+            reason=i.reason[:200],
+            source="Wikipedia" if i.place else "Your must-visit list",
+            attribution=osm_service.ATTRIBUTION if i.place else None,
+            maps_url=i.place["url"] if i.place else None,
+        )
+        for n, i in enumerate(plan.items, start=1)
+    ]
+    if any(not i.verified for i in items):
+        warnings.append(
+            "Unverified places weren't found on the map — check their location yourself."
+        )
     if not items:
         warnings.append(
             "No suggestions fit this time window. Try a longer window or fewer constraints."
         )
+
+    settings = get_settings()
     proposal_id = uuid.uuid4()
     valid_until = datetime.now(UTC) + TOKEN_TTL
     token = jwt.encode(
@@ -200,61 +218,6 @@ def generate(db: Session, user: User, trip_id: str, data: AIPlanIn) -> AIPlanOut
         activities=items,
         warnings=[*warnings, TRAVEL_WARNING, DURATION_NOTE],
     )
-
-
-def _validate_plan(
-    plan: ai_providers.LLMPlan,
-    candidates: list[dict[str, Any]],
-    data: AIPlanIn,
-    window: Interval,
-    busy: list[Interval],
-) -> list[AIPlanItemOut]:
-    """Reject the whole plan if any item is ungrounded or does not fit (ai-feature.md §4)."""
-    if len(plan.items) > MAX_ITEMS:
-        raise unavailable()
-    must_visit = {m.lower(): m for m in data.must_visit}
-    avoid = [a.lower() for a in data.avoid]
-    taken: list[Interval] = list(busy)
-    items: list[AIPlanItemOut] = []
-    for n, item in enumerate(sorted(plan.items, key=lambda i: i.start_time), start=1):
-        if item.candidate_index is not None:
-            if not 0 <= item.candidate_index < len(candidates):
-                raise unavailable()
-            place = candidates[item.candidate_index]
-            name, verified = place["name"], True
-        elif item.must_visit_name and item.must_visit_name.strip().lower() in must_visit:
-            place, name, verified = None, must_visit[item.must_visit_name.strip().lower()], False
-        else:
-            raise unavailable()  # invented place
-        if any(a in name.lower() for a in avoid):
-            raise unavailable()
-        try:
-            start = _min(item.start_time)
-            valid_time = len(item.start_time) == 5 and item.start_time[2] == ":"
-        except ValueError:
-            raise unavailable() from None
-        if not valid_time or not MIN_DURATION <= item.duration_minutes <= MAX_DURATION:
-            raise unavailable()
-        slot = (start, start + item.duration_minutes)
-        if slot[0] < window[0] or slot[1] > window[1] or any(_overlaps(slot, t) for t in taken):
-            raise unavailable()
-        taken.append(slot)
-        items.append(
-            AIPlanItemOut(
-                item_id=f"item-{n}",
-                destination_name=name[:100],
-                time=_hhmm(start),
-                duration_minutes=item.duration_minutes,
-                cost=None,  # the LLM never sets or estimates costs
-                place_id=place["place_id"] if place else None,
-                verified=verified,
-                reason=item.reason.strip()[:200] or None,
-                source="Google Places" if verified else "Your must-visit list",
-                attribution="Powered by Google" if verified else None,
-                maps_url=place["maps_url"] if place else None,
-            )
-        )
-    return items
 
 
 # ---------- Apply ----------

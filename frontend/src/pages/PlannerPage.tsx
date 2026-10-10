@@ -240,7 +240,7 @@ function DayCard(props: {
         {readOnly ? <span /> : (
           <span className="flex flex-wrap gap-1.5">
             <button className={btn.ghost + ' !px-3 !py-1.5'} onClick={props.onAdd}>+ Add activity</button>
-            <button className={btn.text} onClick={props.onPlanAI}>✨ Plan with AI</button>
+            <button className={btn.text} onClick={props.onPlanAI}>✨ Plan my day</button>
           </span>
         )}
         <span className="font-display font-semibold tabular-nums">{inr(day.totalCost)}</span>

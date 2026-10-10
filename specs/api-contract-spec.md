@@ -49,9 +49,9 @@
 | 409 | LAST_DRAFT | Deleting the only draft of a trip |
 | 409 | DRAFT_LIMIT_REACHED | Creating more than 5 drafts in a trip |
 | 413 | PAYLOAD_TOO_LARGE | Request body larger than 100 KB |
-| 429 | RATE_LIMITED | More than 10 signup/login/delete-account attempts per minute from one IP, more than 30 Google suggestion requests per user per day, or more than the configured AI plan-generation limit per user per day (default 10) |
+| 429 | RATE_LIMITED | More than 10 signup/login/delete-account attempts per minute from one IP, more than 30 suggestion requests per user per day, or more than the configured AI plan-generation limit per user per day (default 10) |
 | 409 | AI_PROPOSAL_INVALID | AI proposal token is expired, already applied, or does not match the selected trip/draft |
-| 503 | SUGGESTIONS_UNAVAILABLE | Google Places is not configured or did not respond |
+| 503 | SUGGESTIONS_UNAVAILABLE | Place data (Wikipedia/OpenStreetMap) did not respond |
 | 503 | AI_PLANNING_UNAVAILABLE | AI/location provider is not configured, unavailable, over quota, or returned invalid output |
 | 500 | INTERNAL_ERROR | Unexpected server error (no internal details exposed) |
 
@@ -175,7 +175,7 @@ For any activity response, optional fields are present with `null` when unset. E
 | POST | `/trips/{tripId}/finalize` | Finalize trip from a draft | Yes |
 | POST | `/trips/{tripId}/reopen` | Move finalized trip back to draft | Yes |
 | GET | `/trips/{tripId}/export.pdf` | Download itinerary PDF (finalized only) | Yes |
-| GET | `/trips/{tripId}/suggestions` | Activity suggestions for the destination (Google Places) | Yes |
+| GET | `/trips/{tripId}/suggestions` | Places to visit at the destination (Wikipedia + OpenStreetMap) | Yes |
 | POST | `/trips/{tripId}/ai-plans` | Generate a transient AI day-plan proposal | Yes |
 | GET | `/trips/{tripId}/drafts` | List draft summaries | Yes |
 | POST | `/trips/{tripId}/drafts` | Create draft (blank or copy) | Yes |
@@ -426,7 +426,7 @@ Rules: `username` 3–30 chars, letters/numbers/underscore, unique (case-insensi
 ---
 
 ### `GET /trips/{tripId}/suggestions`
-- **Description:** Up to 10 places to visit in the trip's destination, from the Google Places API (Text Search, "top attractions in {destination}"). Ordered by the trip's `topPriority`: `budget` → cheapest first (free/inexpensive first, then by rating); `destinations` → must-see first (rating × number of reviews); `time` or `null` → by rating. Not stored by the server. Works for draft and finalized trips.
+- **Description:** Up to 10 places to visit near the trip's destination, from Wikipedia, located with OpenStreetMap (cached 7 days per destination). Ordered by the trip's `topPriority`: `budget` → free places first, then most notable; `destinations` or `null` → most notable first; `time` → most notable first. Not tied to the trip's dates. Works for draft and finalized trips.
 - **Auth required:** Yes
 
 **Success response — `200`**
@@ -434,27 +434,28 @@ Rules: `username` 3–30 chars, letters/numbers/underscore, unique (case-insensi
 {
   "suggestions": [
     {
-      "placeId": "ChIJ...",
+      "placeId": "wikipedia:2153418",
       "name": "Fort Aguada",
+      "category": "Fort",
       "address": "Candolim, Goa",
-      "rating": 4.4,
-      "ratingCount": 51234,
+      "rating": null,
+      "ratingCount": null,
       "priceLevel": "free",
-      "mapsUrl": "https://maps.google.com/?cid=..."
+      "mapsUrl": "https://www.openstreetmap.org/?mlat=15.4925&mlon=73.7735#map=16/15.4925/73.7735"
     }
   ],
   "orderedBy": "budget",
-  "attribution": "Google"
+  "attribution": "Places: Wikipedia (CC BY-SA) · Location: © OpenStreetMap contributors"
 }
 ```
-`priceLevel`: `free` \| `inexpensive` \| `moderate` \| `expensive` \| `very_expensive` \| `null` (unknown). `rating` and `ratingCount` may be `null`. The UI must show "Powered by Google" with the results.
+`priceLevel`: `free` \| `inexpensive` \| `moderate` \| `expensive` \| `very_expensive` \| `null` (unknown). `rating` and `ratingCount` may be `null`. `priceLevel` is only `free` (beaches, parks, places of worship, viewpoints, monuments) or `null`; `rating`/`ratingCount` are always `null` (OSM has no ratings; kept for compatibility). The UI must show the `attribution` text with the results.
 
 **Error responses**
 | Status | Code | Condition |
 |--------|------|-----------|
 | 404 | NOT_FOUND | Trip not found |
 | 429 | RATE_LIMITED | More than 30 suggestion requests today |
-| 503 | SUGGESTIONS_UNAVAILABLE | Google API key missing, quota exceeded or Google unreachable |
+| 503 | SUGGESTIONS_UNAVAILABLE | Wikipedia/OpenStreetMap services unavailable or timed out |
 
 ---
 
@@ -489,12 +490,12 @@ Rules: `username` 3–30 chars, letters/numbers/underscore, unique (case-insensi
       "time": "10:00",
       "durationMinutes": 180,
       "cost": null,
-      "placeId": "ChIJ...",
+      "placeId": "wikipedia:654321",
       "verified": true,
-      "reason": "Best visited in the morning before it gets busy.",
-      "source": "Google Places",
-      "attribution": "Powered by Google",
-      "mapsUrl": "https://maps.google.com/?cid=..."
+      "reason": "Museum · notable place · 2.1 km from the previous stop",
+      "source": "Wikipedia",
+      "attribution": "Places: Wikipedia (CC BY-SA) · Location: © OpenStreetMap contributors",
+      "mapsUrl": "https://www.openstreetmap.org/?mlat=15.5009&mlon=73.9116#map=16/15.5009/73.9116"
     }
   ],
   "warnings": ["Travel time between locations is not verified."]
@@ -661,5 +662,6 @@ All selected activities are inserted in one transaction. On any error, none are 
 | 2026-10-03 | Added `DELETE /auth/me` (delete account, MVP); rate limit also covers it | Priyanka Ghate (with Claude) |
 | 2026-10-03 | Added error codes `METHOD_NOT_ALLOWED` (405) and `PAYLOAD_TOO_LARGE` (413) (Phase 1) | Priyanka Ghate (with Claude) |
 | 2026-10-03 | Activity `cost` is rounded to 2 decimals instead of rejected (Phase 4) | Priyanka Ghate (with Claude) |
+| 2026-10-10 | Suggestions and day plans use Wikipedia places located via OpenStreetMap + rule-based planner (no API keys); suggestion `category` added; `rating`/`ratingCount` always null; OSM attribution | Priyanka Ghate (with Claude) |
 | 2026-10-04 | Trip gains `topPriority` and `budget`; activity `priority` removed; new `GET /trips/{tripId}/suggestions` (Google Places) and `SUGGESTIONS_UNAVAILABLE` (US-7a/b/c) | Priyanka Ghate (with Claude) |
 | 2026-10-10 | Add optional activity duration and AI day-plan generation/apply endpoints, provider/rate-limit errors, and proposal-token rules (F12) | Priyanka Ghate |

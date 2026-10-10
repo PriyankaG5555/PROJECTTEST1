@@ -59,6 +59,7 @@ class AffectedActivity(ApiModel):
 class SuggestionOut(ApiModel):
     place_id: str
     name: str
+    category: str | None
     address: str | None
     rating: float | None
     rating_count: int | None
@@ -69,4 +70,4 @@ class SuggestionOut(ApiModel):
 class SuggestionsResponse(ApiModel):
     suggestions: list[SuggestionOut]
     ordered_by: TripPriority | None
-    attribution: str = "Google"
+    attribution: str = "Places: Wikipedia (CC BY-SA) · Location: © OpenStreetMap contributors"

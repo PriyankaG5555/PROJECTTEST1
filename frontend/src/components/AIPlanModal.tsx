@@ -19,7 +19,7 @@ const list = (text: string) =>
     .map((s) => s.trim())
     .filter(Boolean)
 
-/** "Plan this day with AI" — request, review, apply selected (specs/ai-feature.md §3). */
+/** "Plan my day" — request, review, apply selected (specs/ai-feature.md §3). No AI service involved. */
 export default function AIPlanModal({ tripId, draftId, dayNumber, dateLabel, onApplied, onClose }: Props) {
   const [start, setStart] = useState('09:00')
   const [end, setEnd] = useState('18:00')
@@ -72,7 +72,7 @@ export default function AIPlanModal({ tripId, draftId, dayNumber, dateLabel, onA
         proposalToken: plan.proposalToken,
         selectedItemIds: [...selected],
       })
-      await onApplied(`${res.activities.length} AI suggestion${res.activities.length === 1 ? '' : 's'} added`)
+      await onApplied(`${res.activities.length} planned stop${res.activities.length === 1 ? '' : 's'} added`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.')
       setBusy(false)
@@ -88,7 +88,7 @@ export default function AIPlanModal({ tripId, draftId, dayNumber, dateLabel, onA
     })
 
   return (
-    <Modal title={`Plan Day ${dayNumber} with AI · ${dateLabel}`} onClose={onClose} wide>
+    <Modal title={`Plan Day ${dayNumber} · ${dateLabel}`} onClose={onClose} wide>
       {!plan ? (
         <form className="grid gap-4" onSubmit={generate} noValidate>
           <p className="text-sm text-slate-600">
@@ -125,8 +125,8 @@ export default function AIPlanModal({ tripId, draftId, dayNumber, dateLabel, onA
       ) : (
         <div className="grid gap-4">
           <p className="rounded-xl bg-brand-50 px-3 py-2 text-sm">
-            AI-assisted suggestions for {start}–{end}. Durations are estimates — check opening hours and prices with
-            each place.
+            Suggested plan for {start}–{end}, using well-known places from Wikipedia. Durations and travel times are
+            estimates — check opening hours, routes and prices with each place.
           </p>
           {plan.activities.length === 0 ? (
             <p className="text-slate-600">No suggestions fit this time window.</p>
@@ -147,7 +147,7 @@ export default function AIPlanModal({ tripId, draftId, dayNumber, dateLabel, onA
                         )}
                       </span>
                       <span className="text-sm text-slate-600">
-                        {durationLabel(a.durationMinutes)} (AI estimate) · {a.source}
+                        {durationLabel(a.durationMinutes)} (estimate) · {a.source}
                         {a.mapsUrl && (
                           <>
                             {' · '}
@@ -157,7 +157,7 @@ export default function AIPlanModal({ tripId, draftId, dayNumber, dateLabel, onA
                           </>
                         )}
                       </span>
-                      {a.reason && <span className="text-sm text-slate-600 italic">AI note: {a.reason}</span>}
+                      {a.reason && <span className="text-sm text-slate-600 italic">Why: {a.reason}</span>}
                     </span>
                   </label>
                 </li>
@@ -171,7 +171,9 @@ export default function AIPlanModal({ tripId, draftId, dayNumber, dateLabel, onA
               ))}
             </ul>
           )}
-          {plan.activities.some((a) => a.attribution) && <p className="text-xs text-slate-500">Powered by Google</p>}
+          {plan.activities.find((a) => a.attribution) && (
+            <p className="text-xs text-slate-500">{plan.activities.find((a) => a.attribution)?.attribution}</p>
+          )}
           <FormError message={error} />
           <div className="flex flex-wrap justify-end gap-2">
             <button className={btn.ghost} onClick={() => setPlan(null)} disabled={busy}>

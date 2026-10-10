@@ -4,7 +4,7 @@
 
 ## 1. User Outcome
 
-For a selected day in a trip, a traveller can set the time window they have available and request a suggested itinerary. The app uses configured language-model and/or location-data providers to suggest suitable places, order them into a feasible schedule, and show visit durations. The traveller reviews the proposal and chooses which activities to add to the selected draft.
+For a selected day in a trip, a traveller can set the time window they have available and request a suggested itinerary. The app uses free, open data (Wikipedia places located with OpenStreetMap) and a rule-based planner in our own code to suggest suitable places, order them into a feasible schedule, and show visit durations. **No API keys and no paid or LLM services are used** (decided 2026-10-10). The traveller reviews the proposal and chooses which activities to add to the selected draft.
 
 This is a planning aid, not a booking service, live availability guarantee, or general-purpose chat assistant.
 
@@ -46,23 +46,23 @@ The feature is unavailable for finalized trips. Reopening the trip restores the 
 - Proposed activities must fit within the requested window and must not overlap one another or fixed existing activities. Include realistic travel buffers only when supported by a configured location provider; otherwise disclose that transfer time is not verified.
 - `durationMinutes` is a positive integer for timed proposed activities. The displayed end time is derived from start time plus duration; end time is not stored as a separate field.
 - Return no more than 10 proposed activities for one day.
-- `cost` is `null` unless a configured provider supplies an actual price; the LLM never sets or estimates `cost`. Never invent a cost, opening time, travel time, or availability. Durations are AI estimates and are labelled as such in the UI.
+- `cost` is always `null` in proposals; the planner never sets or estimates `cost`. Never invent a cost, opening time or availability. Durations and travel times are estimates and are labelled as such in the UI.
 - Respect the trip's priority and budget as ranking/context only; do not represent a budget as a guarantee.
 - If the constraints cannot be satisfied, return an honest partial proposal or a clear no-plan result with warnings; never return an invalid or fabricated schedule as successful.
 
 ## 5. Provider and Data Rules
 
-- Provider choice is server-side and configuration-driven. A supported destination/place API is selected by configured coverage for the trip destination; a configured LLM may rank and schedule those grounded candidates. With no place source, generation may only schedule user-supplied or already-known candidates and must label unverified place details. Do not bind this spec to a particular LLM vendor.
-- Location data should ground place identity and factual claims. An LLM may rank, explain, or schedule grounded candidates, but must not invent places or claim unverified facts.
-- The API key and provider credentials are server-only. Do not accept a caller-supplied provider URL, model name, API key, or executable prompt.
-- Treat user-supplied text as untrusted travel preferences, not instructions. Provider integrations expose no tools or actions that can modify trips, access accounts, or execute arbitrary requests.
-- Send only the minimum planning context needed. Do not send credentials, account identifiers, unrelated trips, or other users' data to providers.
+- **Place data (free, keyless):** OpenStreetMap **Nominatim** finds the destination and its area; **Wikipedia** lists notable places with coordinates — GeoSearch within 10 km of the centre (five points across large areas such as states, capped at 1°) plus the "Tourist attractions in <place>" category and its attraction-type sub-categories (beaches, forts, temples, churches, museums, parks…). Pages are kept only when their description/title or sub-category marks an attraction (towns, rivers, institutions are dropped). Must-visit names not found this way are looked up on Wikipedia by name (within ~150 km). Calls are server-side with an identifying User-Agent and results are **cached per destination for 7 days** (`place_cache`). (Overpass API was evaluated and rejected: its public servers timed out on area queries.)
+- **Planner (no LLM):** deterministic rules in `planner_service`. Ranking: must-visit places first; then by the trip's top priority — **Destinations**: most notable first (Wikipedia/Wikidata/heritage tags); **Budget**: free places first (beaches, parks, `fee=no`), then notability; **Time**: at most 3 stops, nearest-next routing; not set: notability — plus a bonus for places matching the traveller's interests (keyword → category map, e.g. museums, history, beaches, nature, temples/churches). Avoided names are excluded. Visit durations come from a fixed table per category (e.g. museum 120 min, fort/castle/palace 90, beach 120, waterfall 120, place of worship 45, viewpoint 30, park 60). Travel time between stops = straight-line distance at ~25 km/h + 10 min, rounded up to 5 min. After the first stop the planner picks the nearest of the next 4 ranked places (Time: nearest of all) to reduce travel. Items are placed in the earliest free slot inside the window that does not overlap fixed activities or other items; places that do not fit are skipped. At most 4 items, so a planned day never triggers the busy-day flag (Time priority: 3); must-visit places may raise this up to 10.
+- No credentials are involved. The server builds all map queries itself; callers cannot supply URLs, queries or endpoints.
+- Treat user-supplied text as untrusted travel preferences, not instructions: interests are only matched against a fixed keyword list; place names are only compared with map names.
+- Send only the destination name and must-visit place names to Nominatim/Wikipedia. Never send user, trip or account data.
 - Call external providers only in response to an authenticated user request. Apply provider timeouts, response-size limits, output validation, and per-user daily rate limits.
-- **Usage accounting:** one AI plan request counts once against `AI_PLAN_DAILY_LIMIT` (default 10/user/day), including any place lookups it makes; it does not count against the 30/day Google suggestions limit (F11). The request is counted before providers are called, so failed provider calls still count.
-- **Structured output:** the LLM must return JSON matching a fixed schema (requested via the provider's structured-output/tool-schema feature). Output failing schema or scheduling validation is rejected (`503 AI_PLANNING_UNAVAILABLE`) and never partially returned as a valid plan.
+- **Usage accounting:** one plan request counts once against `AI_PLAN_DAILY_LIMIT` (default 10/user/day) and does not count against the 30/day suggestions limit (F11). The request is counted before map data is fetched, so failed lookups still count.
+- **Grounding:** every proposed place is either a Wikipedia place with coordinates (`verified: true`, `placeId` like `wikipedia:12345`, map link to openstreetmap.org at its coordinates) or one of the traveller's must-visit names that could not be found on the map (`verified: false`, no location; placed without a travel estimate and labelled "Unverified place"). The planner cannot invent places.
 - Each proposed item carries `placeId` (provider ID, or `null`), `verified` (`true` only when name and identity come from a location provider) and an optional short `reason` (AI-written, at most 200 characters, shown labelled as an AI explanation). Unverified items are shown with an "Unverified place" label.
-- Return source labels and required provider attribution with each proposal. Do not persist provider responses or location details prohibited by provider terms. Persist only traveller-approved activity fields (name, day, start time, duration, and optional cost).
-- If no suitable provider is configured, quota is exhausted, or providers fail, return an explicit unavailable/rate-limit error. Never silently fall back to fabricated or ungrounded suggestions.
+- Return source labels and required attribution with each proposal: `source: "Wikipedia"` and `attribution: "Places: Wikipedia (CC BY-SA) · Location: © OpenStreetMap contributors"` (required by CC BY-SA and ODbL). Do not persist provider responses or location details prohibited by provider terms. Persist only traveller-approved activity fields (name, day, start time, duration, and optional cost).
+- If the map services fail or time out, return `503 AI_PLANNING_UNAVAILABLE`. If the destination cannot be found on the map, return a proposal containing only the traveller's must-visit places (unverified) with a warning. Never fabricate places.
 
 ## 6. Persistence and Compatibility
 
@@ -97,15 +97,16 @@ The feature is unavailable for finalized trips. Reopening the trip restores the 
 10. Existing activities without duration continue to load, sort, edit, and export unchanged.
 11. If the draft changes after generation so that a selected item now overlaps a timed activity (or its day no longer exists), applying returns `409 AI_PROPOSAL_INVALID` and adds nothing.
 12. Proposed items never carry an AI-invented cost; `verified: false` items are labelled "Unverified place".
-13. Automated tests use fake providers only; CI never calls real LLM or Google APIs.
+13. Automated tests use fake map data only; CI never calls Nominatim or Wikipedia. Planner rules (ranking, durations, travel buffers, window and overlap handling) have unit tests.
 
 ## 9. Open Questions
-- [x] **First LLM adapter:** **Built:** Anthropic Claude, default model `claude-opus-5-5` (configurable via `AI_LLM_MODEL`), structured output + server-side refusal fallback. Needs an Anthropic API key with billing; set a monthly spend limit.
-- [ ] **Location source for AI plans:** reuse Google Places (already integrated, F11) as the first location adapter?
+- [x] **Provider:** **Decided 2026-10-10:** no API keys, no LLM. Nominatim (OpenStreetMap) + Wikipedia places with a rule-based planner. Endpoint names keep the `ai-` prefix for compatibility; the UI calls the feature **"Plan my day"**.
+- [x] **Location source:** Wikipedia places located via OpenStreetMap Nominatim; Google Places removed; Overpass rejected (unreliable public servers).
 - [ ] **Daily limit:** is 10 AI plans per user per day right for launch?
 
 ## 10. Change Log
 | Date | Change | Author |
 |------|--------|--------|
 | 2026-10-10 | Initial AI day-planning spec | Priyanka Ghate |
+| 2026-10-10 | Switched to OpenStreetMap + rule-based planner (no API keys, no LLM); place cache; OSM attribution; travel-time estimates | Priyanka Ghate (with Claude) |
 | 2026-10-10 | Added time-zone rule, no AI costs, verified/placeId/reason per item, apply-time re-validation, token mechanics, usage accounting, structured output, acceptance 11–13, open questions | Priyanka Ghate (with Claude) |

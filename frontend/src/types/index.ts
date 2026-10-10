@@ -82,6 +82,7 @@ export interface Draft {
 export interface Suggestion {
   placeId: string
   name: string
+  category: string | null
   address: string | null
   rating: number | null
   ratingCount: number | null
