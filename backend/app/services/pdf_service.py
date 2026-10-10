@@ -67,6 +67,15 @@ def pdf_filename(destination: str, start_date: str) -> str:
     return f"GhumakkadYatri-{slug}-{start_date}.pdf"
 
 
+def _time_range(time: str | None, duration: int | None) -> str:
+    if time is None:
+        return "—"
+    if duration is None:
+        return time
+    end = int(time[:2]) * 60 + int(time[3:]) + duration
+    return f"{time}–{end // 60:02d}:{end % 60:02d}"
+
+
 def _date(d: date) -> str:
     return f"{d:%a}, {d.day} {d:%b %Y}"
 
@@ -125,14 +134,14 @@ def build_itinerary_pdf(trip: TripOut, draft: DraftOut) -> bytes:
             continue
         rows = [
             [
-                a.time or "—",
+                _time_range(a.time, a.duration_minutes),
                 Paragraph(a.destination_name, text),
                 format_inr(a.cost, symbol) if a.cost is not None else "",
             ]
             for a in day.activities
         ]
         rows.append(["", "Day total", format_inr(day.total_cost, symbol)])
-        table = Table(rows, colWidths=[18 * mm, 120 * mm, 32 * mm])
+        table = Table(rows, colWidths=[26 * mm, 112 * mm, 32 * mm])
         table.setStyle(
             TableStyle(
                 [

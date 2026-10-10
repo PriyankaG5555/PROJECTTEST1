@@ -57,6 +57,7 @@ export interface Activity {
   dayNumber: number
   destinationName: string
   time: string | null
+  durationMinutes: number | null
   cost: number | null
 }
 
@@ -86,6 +87,28 @@ export interface Suggestion {
   ratingCount: number | null
   priceLevel: string | null
   mapsUrl: string | null
+}
+
+export interface AIPlanItem {
+  itemId: string
+  destinationName: string
+  time: string
+  durationMinutes: number
+  cost: number | null
+  placeId: string | null
+  verified: boolean
+  reason: string | null
+  source: string
+  attribution: string | null
+  mapsUrl: string | null
+}
+
+export interface AIPlan {
+  proposalToken: string
+  validUntil: string
+  dayNumber: number
+  activities: AIPlanItem[]
+  warnings: string[]
 }
 
 export interface AffectedActivity {

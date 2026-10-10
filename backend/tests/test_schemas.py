@@ -13,6 +13,7 @@ def test_activity_serializes_camel_case_with_money_as_number() -> None:
         day_number=1,
         destination_name="Baga Beach",
         time="09:30",
+        duration_minutes=None,
         cost=Decimal("1250.50"),  # ORM gives Decimal
     )
 
@@ -27,7 +28,12 @@ def test_activity_serializes_camel_case_with_money_as_number() -> None:
 
 def test_optional_fields_are_present_as_null() -> None:
     activity = ActivityOut(
-        id=uuid.uuid4(), day_number=2, destination_name="Walk", time=None, cost=None
+        id=uuid.uuid4(),
+        day_number=2,
+        destination_name="Walk",
+        time=None,
+        duration_minutes=None,
+        cost=None,
     )
 
     data = activity.model_dump(mode="json", by_alias=True)

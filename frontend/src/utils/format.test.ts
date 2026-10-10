@@ -16,3 +16,12 @@ test('dayCount includes both ends', () => {
   expect(dayCount('2026-11-14', '2026-11-17')).toBe(4)
   expect(dayCount('2026-11-14', '2026-11-14')).toBe(1)
 })
+
+test('endTime and durationLabel', async () => {
+  const { endTime, durationLabel } = await import('./format')
+  expect(endTime('10:00', 90)).toBe('11:30')
+  expect(endTime('23:00', 60)).toBe('24:00')
+  expect(durationLabel(90)).toBe('1 h 30 min')
+  expect(durationLabel(45)).toBe('45 min')
+  expect(durationLabel(120)).toBe('2 h')
+})

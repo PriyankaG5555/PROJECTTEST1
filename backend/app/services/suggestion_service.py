@@ -79,7 +79,7 @@ def fetch_places(destination: str, api_key: str) -> list[dict[str, Any]]:
         return places
 
 
-def _normalize(place: dict[str, Any]) -> dict[str, Any]:
+def normalize(place: dict[str, Any]) -> dict[str, Any]:
     return {
         "place_id": place.get("id", ""),
         "name": (place.get("displayName") or {}).get("text", ""),
@@ -139,5 +139,5 @@ def suggestions_for(db: Session, user: User, trip_id: str) -> tuple[Trip, list[d
     except (urllib.error.URLError, TimeoutError, ValueError, OSError) as exc:
         logger.warning("google places failed", extra={"error": type(exc).__name__})
         raise unavailable() from None
-    places = [_normalize(p) for p in raw if p.get("displayName")]
+    places = [normalize(p) for p in raw if p.get("displayName")]
     return trip, order(places, trip.top_priority)

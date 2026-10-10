@@ -73,6 +73,7 @@ def test_add_activity_returns_contract_shape(logged_in_client: TestClient) -> No
         "dayNumber": 1,
         "destinationName": "Baga Beach",
         "time": "09:30",
+        "durationMinutes": None,
         "cost": 12.35,
     }
 

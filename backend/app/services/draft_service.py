@@ -128,6 +128,7 @@ def create_draft(db: Session, user: User, trip_id: str, data: DraftCreateIn) -> 
                     day_number=a.day_number,
                     destination_name=a.destination_name,
                     time=a.time,
+                    duration_minutes=a.duration_minutes,
                     cost=a.cost,
                 )
             )

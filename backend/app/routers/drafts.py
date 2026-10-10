@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Response, status
 
 from app.schemas import ActivityOut
+from app.schemas.ai_planning import BulkApplyIn, BulkApplyOut
 from app.schemas.drafts import (
     ActivityCreateIn,
     ActivityResponse,
@@ -14,7 +15,7 @@ from app.schemas.drafts import (
     DraftSummaryResponse,
 )
 from app.security import CurrentUser, DbSession
-from app.services import activity_service, draft_service
+from app.services import activity_service, ai_planning_service, draft_service
 
 router = APIRouter(tags=["drafts"])
 
@@ -66,6 +67,18 @@ def add_activity(
 ) -> ActivityResponse:
     activity = activity_service.add_activity(db, user, draft_id, body)
     return ActivityResponse(activity=ActivityOut.model_validate(activity))
+
+
+@router.post(
+    "/drafts/{draft_id}/activities/bulk",
+    status_code=status.HTTP_201_CREATED,
+    response_model=BulkApplyOut,
+)
+def apply_ai_plan(
+    draft_id: str, body: BulkApplyIn, user: CurrentUser, db: DbSession
+) -> BulkApplyOut:
+    added = ai_planning_service.apply(db, user, draft_id, body)
+    return BulkApplyOut(activities=[ActivityOut.model_validate(a) for a in added])
 
 
 @router.patch("/activities/{activity_id}", response_model=ActivityResponse)

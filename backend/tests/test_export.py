@@ -54,6 +54,7 @@ def _sample(days: int) -> tuple[TripOut, DraftOut]:
         day_number=1,
         destination_name="Baga Beach & Fort <Aguada>",
         time="09:30",
+        duration_minutes=90,
         cost=Decimal("1250.50"),
     )
     day_list = [

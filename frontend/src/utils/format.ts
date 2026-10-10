@@ -22,5 +22,18 @@ export const longDate = (iso: string) =>
 /** "14 Nov" */
 export const shortDate = (iso: string) => part(iso, { day: 'numeric', month: 'short' })
 
+/** "10:00" + 90 min → "11:30" */
+export const endTime = (time: string, minutes: number) => {
+  const end = Number(time.slice(0, 2)) * 60 + Number(time.slice(3)) + minutes
+  return `${String(Math.floor(end / 60)).padStart(2, '0')}:${String(end % 60).padStart(2, '0')}`
+}
+
+/** 90 → "1 h 30 min" */
+export const durationLabel = (minutes: number) => {
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return [h && `${h} h`, m && `${m} min`].filter(Boolean).join(' ')
+}
+
 export const dayCount = (start: string, end: string) =>
   Math.round((parse(end).getTime() - parse(start).getTime()) / 86_400_000) + 1

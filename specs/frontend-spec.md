@@ -22,7 +22,7 @@
 | `/login` | Log In | Log in with username + password | No | US-2 |
 | `/trips` | My Trips | List of the user's trips with status badge; "New trip" button | Yes | US-5, US-11 |
 | `/trips/new` | New Trip | Form: destination, start date, end date, trip type | Yes | US-4 |
-| `/trips/:tripId` | Trip Planner | Day-by-day planner for the selected draft; finalize / reopen / export actions; draft switcher | Yes | US-6, US-7, US-7a, US-8, US-8a, US-9, US-9a |
+| `/trips/:tripId` | Trip Planner | Day-by-day planner for the selected draft; AI day planning; finalize / reopen / export actions; draft switcher | Yes | US-6, US-7, US-7a, US-7d, US-8, US-8a, US-9, US-9a |
 | `/trips/:tripId/edit` | Edit Trip | Edit trip details (destination, dates, type) | Yes | US-10 |
 | `/account` | My Account | Shows username; **Delete my account** (danger zone) | Yes | US-13 |
 | `/trips/:tripId/compare` | Compare Drafts | Pick two drafts; side-by-side view (P2) | Yes | US-8b |
@@ -39,7 +39,7 @@
 1. On `/trips`, user clicks **New trip** → `/trips/new`.
 2. User enters destination, start date, end date, trip type → **Create**.
 3. App navigates to `/trips/:tripId`. The trip is **Draft** with one draft named "Draft 1", pre-split into Day 1 … Day N.
-4. In each day, user clicks **Add activity** → enters destination name (required), time, cost → **Save**.
+4. In each day, user clicks **Add activity** → enters destination name (required), time, duration, cost → **Save**.
 5. Activities in a day are listed by start time; activities without a time appear last. Day and trip cost totals update.
 
 ### Flow 3: Multiple drafts (P1)
@@ -74,6 +74,14 @@
 3. On confirm → account deleted, cache cleared, user sent to `/signup` with the message "Your account has been deleted."
 4. Wrong password → inline error; nothing is deleted.
 
+### Flow 9: AI-assisted day planning (P1)
+1. In an editable draft, the user selects a day and opens **Plan this day with AI**.
+2. The form requires a start and end time in destination-local time; interests, must-visit places, and places to avoid are optional. Existing activities are always retained and planned around.
+3. The user requests suggestions. The `AIPlanningPanel` shows loading/error states; no activity is saved during generation.
+4. The `AIPlanPreview` shows proposed places in order, start time, visit duration and derived end time, optional cost, source/attribution, and any caveats. The user may select or deselect items.
+5. **Add selected to plan** saves the chosen items in one operation and refreshes the draft. Dismissing the proposal or a failed request leaves the draft unchanged.
+6. AI planning is unavailable on finalized trips. Manual activity planning remains available if a provider is unavailable or rate-limited.
+
 ## 4. Components
 | Component | Responsibility | Props / Inputs | Used in |
 |-----------|----------------|----------------|---------|
@@ -86,8 +94,10 @@
 | `PlannerHeader` | Trip summary, status, Finalize / Reopen / Export / Compare buttons | `trip`, `selectedDraft` | Trip Planner |
 | `DraftSwitcher` | Select, create, rename, delete drafts | `drafts`, `selectedDraftId`, `readOnly` | Trip Planner |
 | `DayColumn` | One day: date, activity list, day total, Add activity | `day`, `readOnly` | Trip Planner, Compare |
-| `ActivityItem` | Shows destination name, time, cost; edit/delete | `activity`, `readOnly` | DayColumn |
+| `ActivityItem` | Shows destination name, time, duration/derived end time when set, and cost; edit/delete | `activity`, `readOnly` | DayColumn |
 | `ActivityForm` | Add/edit activity (modal on desktop, full-screen sheet on mobile) | `initialValues?`, `onSubmit` | DayColumn |
+| `AIPlanningPanel` | Collect time window and bounded planning preferences; request a day proposal | `trip`, `draft`, `day`, `readOnly` | Trip Planner |
+| `AIPlanPreview` | Review/select proposed activities; display duration, derived end time, source, attribution, and warnings; apply selected items | `proposal`, `onApply` | AIPlanningPanel |
 | `BudgetBar` | Planned cost vs budget; red when over budget and priority is Budget, gentle notice otherwise | `planned`, `budget`, `topPriority` | Planner header |
 | `SuggestionsPanel` | Get suggestions → list (name, rating, price level, Maps link) + **Add to plan** (opens ActivityForm pre-filled, pick a day); shows "Powered by Google" | `trip` | Trip Planner |
 | `CostTotal` | Formats INR amount (₹1,250) | `amount` | DayColumn, PlannerHeader, Compare |
@@ -158,9 +168,12 @@ interface Activity {
   dayNumber: number;
   destinationName: string;    // required
   time: string | null;        // "HH:mm" 24h
+  durationMinutes: number | null; // Positive visit duration; planned end time is derived
   cost: number | null;        // INR
 }
 ```
+
+The AI proposal is transient client state and is not included in query-cache persistence. Applying selected items is a single server operation; invalidate the selected draft query on success.
 
 ## 6. API Integration
 > Paths are relative to `/api/v1` and match `api-contract-spec.md`; request/response details are defined there.
@@ -180,6 +193,8 @@ interface Activity {
 | List / get drafts | `GET /trips/:tripId/drafts`, `GET /drafts/:draftId` | Spinner in planner area |
 | Create / rename / delete draft | `POST /trips/:tripId/drafts`, `PATCH /drafts/:draftId`, `DELETE /drafts/:draftId` | Toast on success/failure |
 | Add / edit / delete activity | `POST /drafts/:draftId/activities`, `PATCH /activities/:id`, `DELETE /activities/:id` | Optimistic update; roll back and show toast on error |
+| Generate AI day plan | `POST /trips/:tripId/ai-plans` | Spinner; show field errors, `429` limit, or `503` provider message; draft remains unchanged |
+| Apply selected AI activities | `POST /drafts/:draftId/activities/bulk` | Submit selected proposal items once; refresh draft on success; show error without partial client updates |
 | Finalize trip | `POST /trips/:tripId/finalize` (body: `draftId`) | Confirm first; refresh trip |
 | Reopen trip | `POST /trips/:tripId/reopen` | Confirm first; refresh trip |
 | Export PDF | `GET /trips/:tripId/export.pdf` | Button spinner; download file; 409 (trip not finalized) → toast |
@@ -197,7 +212,8 @@ Global rules:
 | Delete account | password | Required |
 | Trip (create/edit) | destination, startDate, endDate, tripType | Destination required, ≤ 100 chars; dates required; endDate ≥ startDate; trip length 1–30 days; tripType one of solo/couple/family/friends |
 | Trip (create/edit), extra | topPriority, budget | topPriority optional (Time / Destinations / Budget / Not set); budget optional, number ≥ 0 |
-| Activity | destinationName, time, cost | destinationName required, ≤ 100 chars; time optional, valid `HH:mm`; cost optional, number ≥ 0 with up to 2 decimals; priority optional, high/medium/low |
+| Activity | destinationName, time, durationMinutes, cost | destinationName required, ≤ 100 chars; time optional, valid `HH:mm`; duration optional, positive integer, requires time and must end by 24:00; cost optional, number ≥ 0 with up to 2 decimals |
+| AI day plan | dayNumber, startTime, endTime, interests, mustVisit, avoid | Valid day; required `HH:mm` times with end after start; optional bounded travel-only lists |
 | Draft | name | Required, ≤ 50 chars, unique within the trip |
 
 Client-side validation is for user feedback only; the backend validates everything again.
@@ -219,10 +235,11 @@ Client-side validation is for user feedback only; the backend validates everythi
 
     Light blue (`brand-200/400`) is for backgrounds and decoration only; text and buttons use `brand-700` or darker so contrast stays ≥ 4.5:1.
   - **Fonts** (Google Fonts): **Poppins** (600/700) for headings, logo and buttons — rounded and playful; **Inter** (400/500) for body text, forms and tables — very readable on mobile.
-- **Design system / theme:** Tailwind with the brand tokens above and a small set of shared components. Status colors: Draft = amber, Finalized = green. Priority colors: High = red, Medium = amber, Low = grey (always with a text label, not color alone). Rounded corners (`rounded-xl`), soft shadows.
+- **Design system / theme:** Tailwind with the brand tokens above and a small set of shared components. Status colors: Draft = amber, Finalized = green. Trip priority is shown with a text label; color is supplemental only. Rounded corners (`rounded-xl`), soft shadows.
 - **Responsiveness:** Mobile-first. Breakpoints: < 640px (phone): one day per row, stacked; 640–1024px (tablet): two columns; > 1024px (laptop): planner shows days in a scrollable grid. Compare page stacks Draft A above Draft B on phones.
 - **Accessibility:** WCAG 2.1 AA: labelled form fields, keyboard navigation for all actions, visible focus, colour contrast ≥ 4.5:1, dialogs trap focus and close with Esc.
 - **Empty / loading / error states:** Every list has an empty state (e.g. "No activities yet — add one"); loading uses skeletons/spinners; errors show a message and a Retry button.
+- **AI planning:** Clearly label AI-generated suggestions and estimates; display sources and required attribution; show partial/no-result, unavailable, and rate-limit states. Do not block manual planning. Existing fixed activities are never silently removed or moved.
 - **Currency & dates:** Costs shown as INR with `₹` and Indian digit grouping (`Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" })`). Dates shown as `Sat, 4 Oct 2026`.
 
 ## 9. Authentication (Client side)
@@ -254,6 +271,7 @@ frontend/
       auth.ts             # auth API calls + hooks
       trips.ts            # trip API calls + hooks
       drafts.ts           # draft + activity API calls + hooks
+      aiPlanning.ts      # AI proposal + bulk-apply API calls and hooks
     components/           # shared components (Section 4)
     pages/
       LoginPage.tsx

@@ -76,6 +76,7 @@ class ActivityOut(ApiModel):
     day_number: int
     destination_name: str
     time: str | None
+    duration_minutes: int | None
     cost: float | None
 
     @field_serializer("cost")

@@ -9,6 +9,21 @@ from app.services.draft_service import touch
 from app.services.ownership import assert_editable, get_owned_activity, get_owned_draft
 
 
+def _minutes(hhmm: str) -> int:
+    hours, minutes = hhmm.split(":")
+    return int(hours) * 60 + int(minutes)
+
+
+def check_duration(time: str | None, duration: int | None) -> None:
+    """Duration needs a start time and must end by midnight (ai-feature.md §4, contract)."""
+    if duration is None:
+        return
+    if time is None:
+        raise validation_error("durationMinutes", "Add a start time to set a duration.")
+    if _minutes(time) + duration > 24 * 60:
+        raise validation_error("durationMinutes", "The activity must end by midnight.")
+
+
 def _check_day(trip: Trip, day_number: int) -> None:
     if not 1 <= day_number <= trip.day_count:
         raise validation_error(
@@ -20,11 +35,13 @@ def add_activity(db: Session, user: User, draft_id: str, data: ActivityCreateIn)
     draft = get_owned_draft(db, draft_id, user)
     assert_editable(draft.trip)
     _check_day(draft.trip, data.day_number)
+    check_duration(data.time, data.duration_minutes)
     activity = Activity(
         draft_id=draft.id,
         day_number=data.day_number,
         destination_name=data.destination_name,
         time=data.time,
+        duration_minutes=data.duration_minutes,
         cost=data.cost,
     )
     db.add(activity)
@@ -48,10 +65,11 @@ def update_activity(db: Session, user: User, activity_id: str, data: ActivityUpd
         activity.day_number = data.day_number
     if data.destination_name is not None:
         activity.destination_name = data.destination_name
-    for optional in ("time", "cost"):
+    for optional in ("time", "duration_minutes", "cost"):
         if optional in fields:  # null clears the value
             setattr(activity, optional, getattr(data, optional))
 
+    check_duration(activity.time, activity.duration_minutes)
     touch(draft.trip, draft)
     db.flush()
     db.refresh(activity)

@@ -49,8 +49,10 @@
 | 409 | LAST_DRAFT | Deleting the only draft of a trip |
 | 409 | DRAFT_LIMIT_REACHED | Creating more than 5 drafts in a trip |
 | 413 | PAYLOAD_TOO_LARGE | Request body larger than 100 KB |
-| 429 | RATE_LIMITED | More than 10 signup/login/delete-account attempts per minute from one IP, or more than 30 suggestion requests per user per day |
+| 429 | RATE_LIMITED | More than 10 signup/login/delete-account attempts per minute from one IP, more than 30 Google suggestion requests per user per day, or more than the configured AI plan-generation limit per user per day (default 10) |
+| 409 | AI_PROPOSAL_INVALID | AI proposal token is expired, already applied, or does not match the selected trip/draft |
 | 503 | SUGGESTIONS_UNAVAILABLE | Google Places is not configured or did not respond |
+| 503 | AI_PLANNING_UNAVAILABLE | AI/location provider is not configured, unavailable, over quota, or returned invalid output |
 | 500 | INTERNAL_ERROR | Unexpected server error (no internal details exposed) |
 
 ## 3. Shared Schemas
@@ -131,9 +133,9 @@ Full draft with Day 1 … Day N (always exactly `trip.dayCount` days, including 
       "date": "2026-11-14",
       "totalCost": 2300,
       "activities": [
-        { "id": "a1...", "dayNumber": 1, "destinationName": "Baga Beach", "time": "09:30", "cost": 0 },
-        { "id": "a2...", "dayNumber": 1, "destinationName": "Fort Aguada", "time": "15:00", "cost": 300 },
-        { "id": "a3...", "dayNumber": 1, "destinationName": "Seafood dinner", "time": null, "cost": 2000 }
+        { "id": "a1...", "dayNumber": 1, "destinationName": "Baga Beach", "time": "09:30", "durationMinutes": null, "cost": 0 },
+        { "id": "a2...", "dayNumber": 1, "destinationName": "Fort Aguada", "time": "15:00", "durationMinutes": 120, "cost": 300 },
+        { "id": "a3...", "dayNumber": 1, "destinationName": "Seafood dinner", "time": null, "durationMinutes": null, "cost": 2000 }
       ]
     },
     { "dayNumber": 2, "date": "2026-11-15", "totalCost": 0, "activities": [] }
@@ -151,7 +153,10 @@ Activities in each day are sorted by `time` ascending; activities with `time: nu
 | dayNumber | integer | Required on create; 1 … `trip.dayCount` |
 | destinationName | string | Required, 1–100 chars, trimmed |
 | time | string \| null | Optional; `HH:mm` 24-hour |
+| durationMinutes | integer \| null | Optional; 1–1440. If present, `time` is required and derived end time must fit the day |
 | cost | number \| null | Optional; ≥ 0, ≤ 10,000,000; rounded to 2 decimals by the server (half up) |
+
+For any activity response, optional fields are present with `null` when unset. Existing stored activities migrate with `durationMinutes: null`.
 
 ## 4. Endpoints Summary
 | Method | Path | Description | Auth |
@@ -171,12 +176,14 @@ Activities in each day are sorted by `time` ascending; activities with `time: nu
 | POST | `/trips/{tripId}/reopen` | Move finalized trip back to draft | Yes |
 | GET | `/trips/{tripId}/export.pdf` | Download itinerary PDF (finalized only) | Yes |
 | GET | `/trips/{tripId}/suggestions` | Activity suggestions for the destination (Google Places) | Yes |
+| POST | `/trips/{tripId}/ai-plans` | Generate a transient AI day-plan proposal | Yes |
 | GET | `/trips/{tripId}/drafts` | List draft summaries | Yes |
 | POST | `/trips/{tripId}/drafts` | Create draft (blank or copy) | Yes |
 | GET | `/drafts/{draftId}` | Get full draft with days and activities | Yes |
 | PATCH | `/drafts/{draftId}` | Rename draft | Yes |
 | DELETE | `/drafts/{draftId}` | Delete draft | Yes |
 | POST | `/drafts/{draftId}/activities` | Add activity | Yes |
+| POST | `/drafts/{draftId}/activities/bulk` | Atomically apply selected items from an AI proposal | Yes |
 | PATCH | `/activities/{activityId}` | Edit / move activity | Yes |
 | DELETE | `/activities/{activityId}` | Delete activity | Yes |
 
@@ -451,6 +458,62 @@ Rules: `username` 3–30 chars, letters/numbers/underscore, unique (case-insensi
 
 ---
 
+### `POST /trips/{tripId}/ai-plans`
+- **Description:** Generate a transient proposal for one day using configured server-side AI and/or destination-place providers. Trip destination, date, priority, budget, and the selected draft's existing activities are loaded by the server. Generation never writes to the draft.
+- **Auth required:** Yes
+
+**Request body**
+```json
+{
+  "draftId": "d1...",
+  "dayNumber": 1,
+  "startTime": "09:00",
+  "endTime": "18:00",
+  "interests": ["museums", "local food"],
+  "mustVisit": ["Goa State Museum"],
+  "avoid": []
+}
+```
+`interests` accepts up to 5 entries of 60 characters each; `mustVisit` and `avoid` accept up to 10 place names of 100 characters each. All are optional travel-only lists. Existing activities in the selected draft are always treated as fixed constraints. Times are destination-local `HH:mm`; `endTime` must be later than `startTime`. Overnight windows are unsupported.
+
+**Success response — `200`**
+```json
+{
+  "proposalToken": "<short-lived-signed-token>",
+  "validUntil": "2026-10-10T16:00:00Z",
+  "dayNumber": 1,
+  "activities": [
+    {
+      "itemId": "item-1",
+      "destinationName": "Goa State Museum",
+      "time": "10:00",
+      "durationMinutes": 180,
+      "cost": null,
+      "placeId": "ChIJ...",
+      "verified": true,
+      "reason": "Best visited in the morning before it gets busy.",
+      "source": "Google Places",
+      "attribution": "Powered by Google",
+      "mapsUrl": "https://maps.google.com/?cid=..."
+    }
+  ],
+  "warnings": ["Travel time between locations is not verified."]
+}
+```
+The token contains the canonical activity fields and is bound to the authenticated user, trip, draft, day, and exact proposed items; it expires after 15 minutes and may be applied once. The server stores only the consumed proposal ID on apply to prevent replay, not the proposal or provider details. The response includes at most 10 activities. `cost`, `attribution`, and `mapsUrl` may be `null` where not provided. Warnings may be empty. Provider attribution must be rendered with the proposal. Results are transient and are not stored.
+
+**Error responses**
+| Status | Code | Condition |
+|--------|------|-----------|
+| 400 | VALIDATION_ERROR | Invalid day, time window, or bounded input |
+| 401 | UNAUTHORIZED | Not logged in |
+| 404 | NOT_FOUND | Trip/draft missing, unowned, or draft is not in the trip |
+| 409 | TRIP_FINALIZED | Trip is finalized |
+| 429 | RATE_LIMITED | Configured per-user daily AI planning limit reached |
+| 503 | AI_PLANNING_UNAVAILABLE | No provider configured, provider unavailable/quota exceeded, or invalid provider output |
+
+---
+
 ### `GET /trips/{tripId}/drafts`
 - **Auth required:** Yes
 - **Success — `200`:** `{ "drafts": [ DraftSummary ] }` (oldest first)
@@ -521,9 +584,9 @@ The Compare Drafts page calls this twice (one per draft); there is no separate c
 
 **Request body**
 ```json
-{ "dayNumber": 1, "destinationName": "Baga Beach", "time": "09:30", "cost": 0 }
+{ "dayNumber": 1, "destinationName": "Baga Beach", "time": "09:30", "durationMinutes": 120, "cost": 0 }
 ```
-`time` and `cost` optional (omit or `null`).
+`time`, `durationMinutes`, and `cost` optional (omit or `null`). If `durationMinutes` is set, `time` is required and the derived end time must fit within the trip day's schedule.
 
 **Success response — `201`**
 ```json
@@ -539,14 +602,45 @@ The Compare Drafts page calls this twice (one per draft); there is no separate c
 
 ---
 
+### `POST /drafts/{draftId}/activities/bulk`
+- **Description:** Atomically add the selected activities from a valid AI proposal token. The server verifies token ownership, draft/trip/day binding, expiry, and single-use status. Only item IDs present in the signed proposal may be applied.
+- **Auth required:** Yes
+
+**Request body**
+```json
+{
+  "proposalToken": "<short-lived-signed-token>",
+  "selectedItemIds": ["item-1"]
+}
+```
+`selectedItemIds` must contain at least one unique item ID from the proposal.
+
+**Success response — `201`**
+```json
+{ "activities": [ Activity ] }
+```
+All selected activities are inserted in one transaction. On any error, none are inserted. Applying a proposal token more than once returns `409 AI_PROPOSAL_INVALID`.
+
+**Error responses**
+| Status | Code | Condition |
+|--------|------|-----------|
+| 400 | VALIDATION_ERROR | Empty/duplicate selection or invalid token fields |
+| 401 | UNAUTHORIZED | Not logged in |
+| 404 | NOT_FOUND | Draft not found |
+| 409 | TRIP_FINALIZED | Trip is finalized |
+| 409 | AI_PROPOSAL_INVALID | Token expired, already applied, bound to another user/trip/draft, or out of date (a selected item now overlaps a timed activity or its day no longer exists) |
+
+---
+
 ### `PATCH /activities/{activityId}`
 - **Description:** Edit any field; changing `dayNumber` moves the activity to another day in the same draft.
 - **Auth required:** Yes
 
 **Request body** (all optional)
 ```json
-{ "dayNumber": 2, "destinationName": "Baga Beach", "time": null, "cost": 150 }
+{ "dayNumber": 2, "destinationName": "Baga Beach", "time": "10:00", "durationMinutes": 90, "cost": 150 }
 ```
+`durationMinutes` may be set to `null` to clear it. A non-null duration requires a non-null start time.
 
 **Success — `200`:** `{ "activity": Activity }`
 
@@ -568,3 +662,4 @@ The Compare Drafts page calls this twice (one per draft); there is no separate c
 | 2026-10-03 | Added error codes `METHOD_NOT_ALLOWED` (405) and `PAYLOAD_TOO_LARGE` (413) (Phase 1) | Priyanka Ghate (with Claude) |
 | 2026-10-03 | Activity `cost` is rounded to 2 decimals instead of rejected (Phase 4) | Priyanka Ghate (with Claude) |
 | 2026-10-04 | Trip gains `topPriority` and `budget`; activity `priority` removed; new `GET /trips/{tripId}/suggestions` (Google Places) and `SUGGESTIONS_UNAVAILABLE` (US-7a/b/c) | Priyanka Ghate (with Claude) |
+| 2026-10-10 | Add optional activity duration and AI day-plan generation/apply endpoints, provider/rate-limit errors, and proposal-token rules (F12) | Priyanka Ghate |
