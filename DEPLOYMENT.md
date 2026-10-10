@@ -33,11 +33,8 @@ CI then runs `alembic upgrade head` on every push to `main` after tests pass.
    - `ENVIRONMENT` = `production`
 4. Deploy. Every push to `main` redeploys; other branches get preview URLs.
 
-## Optional: AI day planning and Google suggestions
-Add in Vercel → Settings → Environment Variables (Production), then redeploy:
-- `GOOGLE_PLACES_API_KEY` — Google Cloud key restricted to Places API (New). Enables suggestions and grounded AI places.
-- `AI_LLM_PROVIDER=anthropic`, `AI_LLM_API_KEY` (Anthropic Console key, with a monthly spend limit), optional `AI_LLM_MODEL` (default `claude-opus-5-5`), `AI_PLAN_DAILY_LIMIT` (default 10).
-Without them the app works normally; the AI and suggestion buttons show a friendly "not available" message.
+## Suggestions and "Plan my day"
+Both use free OpenStreetMap data and our own planner — **no API keys or extra setup**. Optional: set `OSM_CONTACT` (email or URL) in Vercel so OpenStreetMap can contact the app owner, as its usage policy asks.
 
 ## Verify (task 6.5)
 ```
