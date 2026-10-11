@@ -1,9 +1,10 @@
 # Observability — local SigNoz
 
-Traces, metrics and dashboards for GhumakkadYatri using **SigNoz** (open source) and **OpenTelemetry**. Spec: [`specs/observability-spec.md`](../specs/observability-spec.md).
+Traces, logs, metrics and dashboards for GhumakkadYatri using **SigNoz** (open source) and **OpenTelemetry**. Spec: [`specs/observability-spec.md`](../specs/observability-spec.md).
 
 ## What you get
 - **Traces** for every API request, with database queries and calls to Nominatim and Wikipedia (response times, errors).
+- **Logs**: the backend's request, warning and error logs, each linked to its trace (open a trace → **Logs**, or use **Logs Explorer** with `service.name = ghumakkadyatri-api`).
 - **Metrics**: logged-in page views, logins, sign-ups, trips created by destination type (country/state/city) and country, top priority, Plan-my-day and suggestion usage, external API latency.
 - **Privacy**: logged-in users only; user IDs are salted hashes; no usernames, passwords, tokens, IPs, costs or free text.
 

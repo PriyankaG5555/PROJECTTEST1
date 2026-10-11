@@ -1,9 +1,12 @@
 """Observability — observability-spec.md §6 (privacy and off-by-default)."""
 
+import logging
 import uuid
 
 import pytest
 from fastapi.testclient import TestClient
+from opentelemetry.sdk._logs import LoggerProvider
+from opentelemetry.sdk._logs.export import InMemoryLogRecordExporter, SimpleLogRecordProcessor
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
@@ -32,6 +35,27 @@ def test_user_ids_are_hashed_on_spans() -> None:
     assert str(user_id) not in str(attrs)
     assert len(attrs["enduser.id"]) == 16 and attrs["gy.destination"] == "Goa"
     assert "gy.missing" not in attrs
+
+
+def test_logs_are_linked_to_traces_and_user_ids_hashed() -> None:
+    log_exporter = InMemoryLogRecordExporter()
+    logger_provider = LoggerProvider()
+    logger_provider.add_log_record_processor(SimpleLogRecordProcessor(log_exporter))
+    handler = telemetry._log_handler(logger_provider)
+    log = logging.getLogger("test.telemetry.logs")
+    log.addHandler(handler)
+    user_id = str(uuid.uuid4())
+    try:
+        with TracerProvider().get_tracer("test").start_as_current_span("request") as span:
+            log.warning("request", extra={"user_id": user_id, "status": 200})
+    finally:
+        log.removeHandler(handler)
+
+    record = log_exporter.get_finished_logs()[0].log_record
+    attrs = dict(record.attributes or {})
+    assert attrs["user_id"] == telemetry.hash_user(user_id) and attrs["status"] == 200
+    assert user_id not in str(attrs)
+    assert record.trace_id == span.get_span_context().trace_id
 
 
 def test_hash_is_stable_and_salted(monkeypatch: pytest.MonkeyPatch) -> None:

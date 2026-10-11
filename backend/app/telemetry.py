@@ -1,9 +1,10 @@
-"""OpenTelemetry traces + business metrics (specs/observability-spec.md).
+"""OpenTelemetry traces, logs + business metrics (specs/observability-spec.md).
 
 Off unless OTEL_EXPORTER_OTLP_ENDPOINT is set (e.g. http://localhost:4318 for a local SigNoz).
-Never records usernames, passwords, tokens, IPs, costs or free text (spec §2.3).
+Never records usernames, passwords, tokens, IPs, costs or free text (spec §2.4).
 """
 
+import copy
 import hashlib
 import logging
 import time
@@ -46,10 +47,14 @@ def setup(app: FastAPI) -> None:
     endpoint = (settings.otel_exporter_otlp_endpoint or "").rstrip("/")
     if not endpoint or _enabled:
         return
+    from opentelemetry._logs import set_logger_provider
+    from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
     from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
     from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
     from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
     from opentelemetry.instrumentation.urllib import URLLibInstrumentor
+    from opentelemetry.sdk._logs import LoggerProvider
+    from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
     from opentelemetry.sdk.metrics import MeterProvider
     from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
     from opentelemetry.sdk.resources import Resource
@@ -74,12 +79,33 @@ def setup(app: FastAPI) -> None:
         OTLPMetricExporter(endpoint=f"{endpoint}/v1/metrics"), export_interval_millis=10_000
     )
     metrics.set_meter_provider(MeterProvider(resource=resource, metric_readers=[reader]))
+    logger_provider = LoggerProvider(resource=resource)
+    logger_provider.add_log_record_processor(
+        BatchLogRecordProcessor(OTLPLogExporter(endpoint=f"{endpoint}/v1/logs"))
+    )
+    set_logger_provider(logger_provider)
+    logging.getLogger().addHandler(_log_handler(logger_provider))
 
     FastAPIInstrumentor.instrument_app(app, excluded_urls="api/v1/health")
     _trace_database(get_engine())
     URLLibInstrumentor().instrument()
     _enabled = True
     logger.info("telemetry enabled", extra={"endpoint": endpoint})
+
+
+def _log_handler(logger_provider: Any) -> logging.Handler:
+    """Send app logs to SigNoz, linked to the current trace; user IDs are hashed like on spans."""
+    from opentelemetry.instrumentation.logging.handler import LoggingHandler
+
+    class PrivacyLoggingHandler(LoggingHandler):
+        def emit(self, record: logging.LogRecord) -> None:
+            user_id = getattr(record, "user_id", None)
+            if user_id is not None:
+                record = copy.copy(record)  # the console handler keeps the original record
+                record.user_id = hash_user(user_id)
+            super().emit(record)
+
+    return PrivacyLoggingHandler(level=logging.INFO, logger_provider=logger_provider)
 
 
 def _trace_database(engine: Any) -> None:
