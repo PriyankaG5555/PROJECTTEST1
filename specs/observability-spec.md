@@ -30,7 +30,11 @@
 
 Destination type and country come from Nominatim (`addresstype`, `address.country`), resolved once per destination and cached 30 days (`destination_cache`). If unavailable, `unknown` — telemetry never blocks or slows trip creation by more than 3 s.
 
-### 2.3 Never collected
+### 2.3 Logs
+- The backend's Python logs (INFO and above: one `request` line per API call with method, path, status, duration; warnings such as failed place lookups; unhandled errors with stack trace) are exported over OTLP (`/v1/logs`) with the same resource attributes.
+- Each log carries the trace and span ID of its request, so a trace in SigNoz shows its logs. A `user_id` field is replaced by the same salted hash as `enduser.id`; the console log is unchanged.
+
+### 2.4 Never collected
 Usernames, passwords, session cookies/JWTs, IP addresses, activity names, costs or budgets, free-text inputs (interests, must-visit lists). User IDs are only sent as a salted SHA-256 hash.
 
 ## 3. Frontend
@@ -58,11 +62,13 @@ Provided as panel definitions in `observability/dashboards/README.md` (built in 
 2. With SigNoz running, a request produces a trace with request, DB and (when applicable) Nominatim/Wikipedia spans.
 3. Creating a trip records `gy.trips.created` with destination type, country and priority.
 4. External call durations appear in `gy.external.duration` by service.
-5. No forbidden data (§2.3) appears in any span or metric (tested).
+5. No forbidden data (§2.4) appears in any span, log or metric (tested).
+7. Request logs appear in SigNoz Logs, linked to their traces, with hashed user IDs.
 6. Page views are recorded only for logged-in users, with route templates.
 
 ## 7. Change Log
 | Date | Change | Author |
 |------|--------|--------|
+| 2026-10-11 | Logs exported to SigNoz (OTLP), linked to traces, user IDs hashed | Priyanka Ghate (with Claude) |
 | 2026-10-11 | Install via SigNoz Foundry (compose manifests deprecated upstream); first-run admin account required; DB spans via SQLAlchemy events (the OTel SQLAlchemy plugin does not support SQLAlchemy 2.1) | Priyanka Ghate (with Claude) |
 | 2026-10-11 | Initial spec: SigNoz (local), OpenTelemetry, logged-in usage, destination/priority metrics, external API latency | Priyanka Ghate (with Claude) |
