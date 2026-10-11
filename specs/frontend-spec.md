@@ -63,6 +63,14 @@
 2. The planner header shows the priority and `BudgetBar` (planned vs budget). Over budget → red warning if priority is Budget, gentle notice otherwise. Days with more than 4 activities show a **Busy day** flag (prominent when priority is Time).
 3. **Get suggestions** loads up to 10 places ordered by the priority. **Add to plan** → choose a day → Add activity form pre-filled with the place name. Errors (503/429) show a friendly message; the planner keeps working.
 
+### Flow 10: Stays (P1)
+1. In the planner, **Stays** shows each stay ("Hotel Mandovi · nights 1–2 · ₹3,500/night"); day cards show "🏨 Night at …".
+2. **Find hotels** lists nearby hotels/guest houses/hostels (OpenStreetMap); **Use this hotel** opens the stay form pre-filled; the traveller picks check-in/check-out days and optional cost per night.
+3. Plan my day shows "Starts and ends at <hotel>" when a stay covers that night.
+
+### Flow 11: Telemetry (logged-in only)
+On each route change while logged in, the app sends the route template to `POST /telemetry/page-view` (fire-and-forget). Nothing is sent when logged out.
+
 ### Flow 6: Edit / delete trip (P1)
 1. From My Trips or the planner, user chooses **Edit trip** → `/trips/:tripId/edit` → saves changes.
 2. If the new dates shorten the trip and days with activities would be removed, a warning lists the affected days and activities (in every draft). On confirmation those activities are **deleted**; on cancel nothing changes.
@@ -99,6 +107,7 @@
 | `AIPlanningPanel` | Collect time window and bounded planning preferences; request a day proposal | `trip`, `draft`, `day`, `readOnly` | Trip Planner |
 | `AIPlanPreview` | Review/select proposed activities; display duration, derived end time, source, attribution, and warnings; apply selected items | `proposal`, `onApply` | AIPlanningPanel |
 | `BudgetBar` | Planned cost vs budget; red when over budget and priority is Budget, gentle notice otherwise | `planned`, `budget`, `topPriority` | Planner header |
+| `StaysPanel` | Lists stays (nights, hotel, cost); Add/Edit/Delete stay; **Find hotels** (OpenStreetMap suggestions ordered by priority, "Use this hotel") | `trip`, `readOnly` | Trip Planner |
 | `SuggestionsPanel` | Get suggestions → list (name, category, "Free" when known, map link) + **Add to plan** (opens ActivityForm pre-filled, pick a day); shows the API's `attribution` text (Wikipedia + OpenStreetMap) | `trip` | Trip Planner |
 | `CostTotal` | Formats INR amount (₹1,250) | `amount` | DayColumn, PlannerHeader, Compare |
 | `ConfirmDialog` | Confirm finalize / reopen / delete | `title`, `message`, `onConfirm` | Several |

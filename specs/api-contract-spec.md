@@ -45,6 +45,8 @@
 | 409 | TRIP_FINALIZED | Change attempted on a finalized trip (reopen first) |
 | 409 | TRIP_NOT_FINALIZED | Export or reopen on a draft trip |
 | 409 | ACTIVITIES_WOULD_BE_DELETED | Trip date change would delete activities and was not confirmed; `details.affected` lists them |
+| 409 | STAY_OVERLAP | A stay's nights overlap another stay of the trip |
+| 409 | STAY_LIMIT_REACHED | Trip already has 10 stays |
 | 409 | DRAFT_NAME_TAKEN | Draft name already used in this trip |
 | 409 | LAST_DRAFT | Deleting the only draft of a trip |
 | 409 | DRAFT_LIMIT_REACHED | Creating more than 5 drafts in a trip |
@@ -175,6 +177,12 @@ For any activity response, optional fields are present with `null` when unset. E
 | POST | `/trips/{tripId}/finalize` | Finalize trip from a draft | Yes |
 | POST | `/trips/{tripId}/reopen` | Move finalized trip back to draft | Yes |
 | GET | `/trips/{tripId}/export.pdf` | Download itinerary PDF (finalized only) | Yes |
+| GET | `/trips/{tripId}/stays` | List the trip's stays | Yes |
+| POST | `/trips/{tripId}/stays` | Add a stay | Yes |
+| PATCH | `/stays/{stayId}` | Edit a stay | Yes |
+| DELETE | `/stays/{stayId}` | Delete a stay | Yes |
+| GET | `/trips/{tripId}/hotel-suggestions` | Hotels, guest houses, hostels near the destination (OpenStreetMap) | Yes |
+| POST | `/telemetry/page-view` | Record a logged-in page view (route template) | Yes |
 | GET | `/trips/{tripId}/suggestions` | Places to visit at the destination (Wikipedia + OpenStreetMap) | Yes |
 | POST | `/trips/{tripId}/ai-plans` | Generate a transient AI day-plan proposal | Yes |
 | GET | `/trips/{tripId}/drafts` | List draft summaries | Yes |
@@ -425,6 +433,47 @@ Rules: `username` 3–30 chars, letters/numbers/underscore, unique (case-insensi
 
 ---
 
+### Stays — schema (`Stay`)
+```json
+{
+  "id": "s1...", "name": "Hotel Mandovi", "checkInDay": 1, "checkOutDay": 3, "nights": 2,
+  "costPerNight": 3500, "totalCost": 7000, "placeId": "osm:node/123", "verified": true,
+  "kind": "hotel", "stars": 3, "lat": 15.4989, "lon": 73.8278, "address": "Panaji, Goa",
+  "url": "https://www.openstreetmap.org/node/123"
+}
+```
+Rules (accommodation-feature.md §2): `checkInDay` 1…dayCount; `checkOutDay` checkInDay+1…dayCount+1; `costPerNight` optional INR ≥ 0 (rounded to 2 decimals); nights may not overlap another stay (`409 STAY_OVERLAP`); max 10 per trip; finalized lock applies. `TripDetail` gains `stays: Stay[]` (sorted by check-in) and `staysTotalCost` (number). When shortening a trip, `ACTIVITIES_WOULD_BE_DELETED.details` also includes `affectedStays: [{stayId, name, checkInDay}]`.
+
+### `GET /trips/{tripId}/stays` → `200 { "stays": [Stay] }`
+### `POST /trips/{tripId}/stays` → `201 { "stay": Stay }`
+Body: `{ "name", "checkInDay", "checkOutDay", "costPerNight"?, "placeId"?, "kind"?, "stars"?, "lat"?, "lon"?, "address"?, "url"? }` (map fields come from a hotel suggestion). Errors: `400 VALIDATION_ERROR`, `404`, `409 TRIP_FINALIZED | STAY_OVERLAP | STAY_LIMIT_REACHED`.
+### `PATCH /stays/{stayId}` → `200 { "stay": Stay }` — any field; `null` clears optional fields. Same errors.
+### `DELETE /stays/{stayId}` → `204`. Errors: `404`, `409 TRIP_FINALIZED`.
+
+---
+
+### `GET /trips/{tripId}/hotel-suggestions`
+Up to 15 accommodations from OpenStreetMap Nominatim, cached 7 days, ordered by `topPriority` (accommodation-feature.md §3). Counts against the 30/day suggestions limit.
+```json
+{
+  "hotels": [
+    { "placeId": "osm:node/123", "name": "Hotel Mandovi", "kind": "hotel", "stars": 3,
+      "address": "D.B. Marg, Panaji", "website": "https://…", "lat": 15.4989, "lon": 73.8278,
+      "distanceKm": 1.2, "mapsUrl": "https://www.openstreetmap.org/node/123" }
+  ],
+  "orderedBy": "budget",
+  "attribution": "© OpenStreetMap contributors"
+}
+```
+`kind`: `hotel` \| `guest_house` \| `hostel` \| `resort` \| `apartment` \| `motel`. `stars`, `website`, `distanceKm` may be `null`. Errors: `404`, `429 RATE_LIMITED`, `503 SUGGESTIONS_UNAVAILABLE`.
+
+---
+
+### `POST /telemetry/page-view`
+Body `{ "route": "/trips/:tripId" }` (route template, max 100 chars, must start with `/`). `204`. Logged-in only (`401` otherwise). Recorded only when observability is enabled; otherwise accepted and ignored (observability-spec.md §3).
+
+---
+
 ### `GET /trips/{tripId}/suggestions`
 - **Description:** Up to 10 places to visit near the trip's destination, from Wikipedia, located with OpenStreetMap (cached 7 days per destination). Ordered by the trip's `topPriority`: `budget` → free places first, then most notable; `destinations` or `null` → most notable first; `time` → most notable first. Not tied to the trip's dates. Works for draft and finalized trips.
 - **Auth required:** Yes
@@ -472,7 +521,8 @@ Rules: `username` 3–30 chars, letters/numbers/underscore, unique (case-insensi
   "endTime": "18:00",
   "interests": ["museums", "local food"],
   "mustVisit": ["Goa State Museum"],
-  "avoid": []
+  "avoid": [],
+  "useStay": true
 }
 ```
 `interests` accepts up to 5 entries of 60 characters each; `mustVisit` and `avoid` accept up to 10 place names of 100 characters each. All are optional travel-only lists. Existing activities in the selected draft are always treated as fixed constraints. Times are destination-local `HH:mm`; `endTime` must be later than `startTime`. Overnight windows are unsupported.
@@ -498,6 +548,7 @@ Rules: `username` 3–30 chars, letters/numbers/underscore, unique (case-insensi
       "mapsUrl": "https://www.openstreetmap.org/?mlat=15.5009&mlon=73.9116#map=16/15.5009/73.9116"
     }
   ],
+  "startPoint": { "name": "Hotel Mandovi", "lat": 15.4989, "lon": 73.8278 },
   "warnings": ["Travel time between locations is not verified."]
 }
 ```
@@ -662,6 +713,7 @@ All selected activities are inserted in one transaction. On any error, none are 
 | 2026-10-03 | Added `DELETE /auth/me` (delete account, MVP); rate limit also covers it | Priyanka Ghate (with Claude) |
 | 2026-10-03 | Added error codes `METHOD_NOT_ALLOWED` (405) and `PAYLOAD_TOO_LARGE` (413) (Phase 1) | Priyanka Ghate (with Claude) |
 | 2026-10-03 | Activity `cost` is rounded to 2 decimals instead of rejected (Phase 4) | Priyanka Ghate (with Claude) |
+| 2026-10-11 | Stays (`/trips/{id}/stays`, `/stays/{id}`), hotel suggestions, `STAY_OVERLAP`/`STAY_LIMIT_REACHED`, TripDetail `stays`/`staysTotalCost`, AI plan `useStay`/`startPoint`, `POST /telemetry/page-view` | Priyanka Ghate (with Claude) |
 | 2026-10-10 | Suggestions and day plans use Wikipedia places located via OpenStreetMap + rule-based planner (no API keys); suggestion `category` added; `rating`/`ratingCount` always null; OSM attribution | Priyanka Ghate (with Claude) |
 | 2026-10-04 | Trip gains `topPriority` and `budget`; activity `priority` removed; new `GET /trips/{tripId}/suggestions` (Google Places) and `SUGGESTIONS_UNAVAILABLE` (US-7a/b/c) | Priyanka Ghate (with Claude) |
 | 2026-10-10 | Add optional activity duration and AI day-plan generation/apply endpoints, provider/rate-limit errors, and proposal-token rules (F12) | Priyanka Ghate |
