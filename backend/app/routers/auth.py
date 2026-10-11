@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, Request, Response, status
 
+from app import telemetry
 from app.schemas import UserOut
 from app.schemas.auth import DeleteAccountIn, LoginIn, SignupIn, UserResponse
 from app.security import CurrentUser, DbSession, clear_session_cookie, set_session_cookie
@@ -16,6 +17,8 @@ def signup(body: SignupIn, request: Request, response: Response, db: DbSession) 
     check_auth_rate_limit(request)
     user = auth_service.signup(db, body.username, body.password)
     set_session_cookie(response, user.id)
+    telemetry.SIGNUPS.add(1)
+    telemetry.set_user(user.id)
     return UserResponse(user=UserOut.model_validate(user))
 
 
@@ -24,6 +27,8 @@ def login(body: LoginIn, request: Request, response: Response, db: DbSession) ->
     check_auth_rate_limit(request)
     user = auth_service.login(db, body.username, body.password)
     set_session_cookie(response, user.id)
+    telemetry.LOGINS.add(1)
+    telemetry.set_user(user.id)
     return UserResponse(user=UserOut.model_validate(user))
 
 

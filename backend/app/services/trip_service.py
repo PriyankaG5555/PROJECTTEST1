@@ -8,8 +8,8 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.errors import AppError, validation_error
-from app.models import Activity, Draft, Trip, TripStatus, User
-from app.schemas import DraftSummaryOut, TripDetailOut, TripOut
+from app.models import Activity, Draft, Stay, Trip, TripStatus, User
+from app.schemas import DraftSummaryOut, StayOut, TripDetailOut, TripOut
 from app.schemas.base import to_camel
 from app.schemas.trips import AffectedActivity, TripCreateIn, TripUpdateIn
 from app.services.ownership import assert_editable, get_owned_trip
@@ -74,7 +74,17 @@ def trip_detail(db: Session, trip: Trip) -> TripDetailOut:
     db.flush()
     db.refresh(trip)  # server-side timestamps
     drafts = draft_summaries(db, trip)
-    return TripDetailOut.model_validate({**_trip_fields(trip, len(drafts)), "drafts": drafts})
+    stays = list(
+        db.scalars(select(Stay).where(Stay.trip_id == trip.id).order_by(Stay.check_in_day))
+    )
+    return TripDetailOut.model_validate(
+        {
+            **_trip_fields(trip, len(drafts)),
+            "drafts": drafts,
+            "stays": [StayOut.model_validate(s) for s in stays],
+            "stays_total_cost": sum((s.total_cost or Decimal(0) for s in stays), Decimal(0)),
+        }
+    )
 
 
 # ---------- Operations ----------
@@ -130,7 +140,9 @@ def update_trip(db: Session, user: User, trip_id: str, data: TripUpdateIn) -> tu
             .where(Draft.trip_id == trip.id, Activity.day_number > new_day_count)
             .order_by(Draft.created_at, Activity.day_number, Activity.created_at)
         ).all()
-        if affected and not data.confirm_delete_activities:
+        stays = list(db.scalars(select(Stay).where(Stay.trip_id == trip.id)))
+        gone_stays = [s for s in stays if s.check_in_day > new_day_count]
+        if (affected or gone_stays) and not data.confirm_delete_activities:
             n = len(affected)
             raise AppError(
                 "ACTIVITIES_WOULD_BE_DELETED",
@@ -146,12 +158,21 @@ def update_trip(db: Session, user: User, trip_id: str, data: TripUpdateIn) -> tu
                             destination_name=a.destination_name,
                         ).model_dump(mode="json", by_alias=True)
                         for a, d in affected
-                    ]
+                    ],
+                    "affectedStays": [
+                        {"stayId": str(s.id), "name": s.name, "checkInDay": s.check_in_day}
+                        for s in gone_stays
+                    ],
                 },
             )
         if affected:
             db.execute(delete(Activity).where(Activity.id.in_([a.id for a, _ in affected])))
             deleted = len(affected)
+        for stay in stays:  # stays after the new last day go; longer ones are shortened
+            if stay in gone_stays:
+                db.delete(stay)
+            elif stay.check_out_day > new_day_count + 1:
+                stay.check_out_day = new_day_count + 1
 
     if data.destination is not None:
         trip.destination = data.destination

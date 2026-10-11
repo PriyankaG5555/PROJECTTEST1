@@ -2,10 +2,19 @@
 
 from fastapi import APIRouter, Response, status
 
+from app import telemetry
 from app.errors import AppError
 from app.models import Draft, TripStatus
+from app.schemas import StayOut
 from app.schemas.ai_planning import AIPlanIn, AIPlanOut
 from app.schemas.drafts import FinalizeIn
+from app.schemas.stays import (
+    HotelOut,
+    HotelSuggestionsResponse,
+    StayIn,
+    StayListResponse,
+    StayResponse,
+)
 from app.schemas.trips import (
     SuggestionOut,
     SuggestionsResponse,
@@ -16,7 +25,15 @@ from app.schemas.trips import (
     TripUpdateResponse,
 )
 from app.security import CurrentUser, DbSession
-from app.services import ai_planning_service, draft_service, suggestion_service, trip_service
+from app.services import (
+    ai_planning_service,
+    draft_service,
+    hotel_service,
+    osm_service,
+    stay_service,
+    suggestion_service,
+    trip_service,
+)
 from app.services.ownership import get_owned_trip
 from app.services.pdf_service import build_itinerary_pdf, pdf_filename
 
@@ -33,6 +50,12 @@ def list_trips(
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=TripResponse)
 def create_trip(body: TripCreateIn, user: CurrentUser, db: DbSession) -> TripResponse:
     trip = trip_service.create_trip(db, user, body)
+    if telemetry.enabled():  # destination type/country only matter for telemetry
+        info = osm_service.resolve_destination(db, trip.destination)
+        attrs = telemetry.destination_attrs(info, trip.destination)
+        priority = trip.top_priority.value if trip.top_priority else "not_set"
+        telemetry.TRIPS_CREATED.add(1, {**attrs, "top_priority": priority})
+        telemetry.annotate(**attrs, top_priority=priority)
     return TripResponse(trip=trip_service.trip_detail(db, trip))
 
 
@@ -85,6 +108,26 @@ def export_pdf(trip_id: str, user: CurrentUser, db: DbSession) -> Response:
 @router.post("/{trip_id}/ai-plans", response_model=AIPlanOut)
 def generate_ai_plan(trip_id: str, body: AIPlanIn, user: CurrentUser, db: DbSession) -> AIPlanOut:
     return ai_planning_service.generate(db, user, trip_id, body)
+
+
+@router.get("/{trip_id}/stays", response_model=StayListResponse)
+def list_stays(trip_id: str, user: CurrentUser, db: DbSession) -> StayListResponse:
+    stays = stay_service.list_stays(db, user, trip_id)
+    return StayListResponse(stays=[StayOut.model_validate(s) for s in stays])
+
+
+@router.post("/{trip_id}/stays", status_code=status.HTTP_201_CREATED, response_model=StayResponse)
+def create_stay(trip_id: str, body: StayIn, user: CurrentUser, db: DbSession) -> StayResponse:
+    stay = stay_service.create_stay(db, user, trip_id, body)
+    return StayResponse(stay=StayOut.model_validate(stay))
+
+
+@router.get("/{trip_id}/hotel-suggestions", response_model=HotelSuggestionsResponse)
+def hotel_suggestions(trip_id: str, user: CurrentUser, db: DbSession) -> HotelSuggestionsResponse:
+    trip, hotels = hotel_service.hotel_suggestions(db, user, trip_id)
+    return HotelSuggestionsResponse(
+        hotels=[HotelOut(**h) for h in hotels], ordered_by=trip.top_priority
+    )
 
 
 @router.get("/{trip_id}/suggestions", response_model=SuggestionsResponse)

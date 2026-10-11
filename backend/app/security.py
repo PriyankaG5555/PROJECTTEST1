@@ -12,6 +12,7 @@ import jwt
 from fastapi import Depends, Request, Response
 from sqlalchemy.orm import Session
 
+from app import telemetry
 from app.config import get_settings
 from app.db import get_db
 from app.errors import AppError
@@ -101,6 +102,7 @@ def get_current_user(request: Request, db: Annotated[Session, Depends(get_db)]) 
     if user is None:
         raise AppError("UNAUTHORIZED", 401, "Please log in.")
     request.state.user_id = str(user.id)
+    telemetry.set_user(user.id)
     return user
 
 

@@ -13,7 +13,7 @@
 
 ## 2. What is collected
 ### 2.1 Traces (every API request)
-- Automatic spans: incoming HTTP requests (FastAPI), database queries (SQLAlchemy), outgoing HTTP calls (urllib → Nominatim, Wikipedia).
+- Automatic spans: incoming HTTP requests (FastAPI), database queries (SQLAlchemy events: operation + duration, no SQL values), outgoing HTTP calls (urllib → Nominatim, Wikipedia).
 - Custom spans: `places.fetch` (destination, cache hit, number of places), `destination.resolve` (destination type and country), `planner.plan_day` (priority, candidates, items, warnings, hotel used), `hotels.fetch` (destination, cache hit, results), `pdf.build` (days, activities).
 - Resource attributes: `service.name=ghumakkadyatri-api`, `service.version`, `deployment.environment`.
 
@@ -51,7 +51,7 @@ Provided as panel definitions in `observability/dashboards/README.md` (built in 
 10. Database query p95
 
 ## 5. Running it locally
-`observability/README.md`: install Docker Desktop → `observability/start-signoz.ps1` (clones SigNoz's official compose files into `observability/.signoz/`, git-ignored, and starts them) → set `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318` in `backend/.env` → run the app → open SigNoz.
+`observability/README.md`: start Docker Desktop → `observability/start-signoz.ps1` (downloads SigNoz's installer **Foundry** into `observability/.tools/`, which generates Docker Compose files into `observability/pours/` from `observability/casting.yaml` and starts them; both folders git-ignored) → first run only: create the SigNoz admin account at http://localhost:8080 (SigNoz accepts telemetry only once an organization exists) → set `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318` in `backend/.env` → run the app → open SigNoz.
 
 ## 6. Acceptance criteria
 1. With the endpoint unset, the app behaves exactly as before (no exporter, no errors).
@@ -64,4 +64,5 @@ Provided as panel definitions in `observability/dashboards/README.md` (built in 
 ## 7. Change Log
 | Date | Change | Author |
 |------|--------|--------|
+| 2026-10-11 | Install via SigNoz Foundry (compose manifests deprecated upstream); first-run admin account required; DB spans via SQLAlchemy events (the OTel SQLAlchemy plugin does not support SQLAlchemy 2.1) | Priyanka Ghate (with Claude) |
 | 2026-10-11 | Initial spec: SigNoz (local), OpenTelemetry, logged-in usage, destination/priority metrics, external API latency | Priyanka Ghate (with Claude) |

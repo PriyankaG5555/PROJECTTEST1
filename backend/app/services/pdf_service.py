@@ -127,8 +127,14 @@ def build_itinerary_pdf(trip: TripOut, draft: DraftOut) -> bytes:
     )
     story.append(Spacer(1, 4 * mm))
 
+    stays = list(getattr(trip, "stays", []))
     for day in draft.days:
         story.append(Paragraph(f"Day {day.day_number} · {_date(day.date)}", day_style))
+        night = next(
+            (st for st in stays if st.check_in_day <= day.day_number < st.check_out_day), None
+        )
+        if night is not None:
+            story.append(Paragraph(f"Night at {night.name}", muted))
         if not day.activities:
             story.append(Paragraph("No activities planned", muted))
             continue
@@ -158,9 +164,14 @@ def build_itinerary_pdf(trip: TripOut, draft: DraftOut) -> bytes:
         )
         story.append(table)
 
-    summary = [["Trip total", format_inr(draft.total_cost, symbol)]]
+    stays_total = Decimal(str(getattr(trip, "stays_total_cost", 0) or 0))
+    summary = [["Activities total", format_inr(draft.total_cost, symbol)]]
+    if stays:
+        summary.append(["Stays total", format_inr(stays_total, symbol)])
+    grand_total = Decimal(str(draft.total_cost)) + stays_total
+    summary.append(["Trip total", format_inr(grand_total, symbol)])
     if trip.budget is not None:
-        remaining = Decimal(str(trip.budget)) - Decimal(str(draft.total_cost))
+        remaining = Decimal(str(trip.budget)) - grand_total
         summary.append(["Budget", format_inr(trip.budget, symbol)])
         summary.append(
             ["Over budget by" if remaining < 0 else "Remaining", format_inr(abs(remaining), symbol)]

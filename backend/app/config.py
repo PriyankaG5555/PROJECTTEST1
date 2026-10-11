@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     session_ttl_days: int = Field(default=7, ge=1)
     cookie_secure: bool = True
     log_level: str = "INFO"
+    # Observability (specs/observability-spec.md): unset endpoint = telemetry off.
+    otel_exporter_otlp_endpoint: str | None = None
+    otel_service_name: str = "ghumakkadyatri-api"
+    telemetry_hash_salt: str | None = None
     # Contact sent in the User-Agent to OpenStreetMap services (their usage policy asks for it).
     osm_contact: str = "https://ghumakkadyatri.vercel.app"
     ai_plan_daily_limit: int = Field(default=10, ge=1)

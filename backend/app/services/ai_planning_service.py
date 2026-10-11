@@ -10,12 +10,13 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app import telemetry
 from app.config import get_settings
 from app.db import get_engine
 from app.errors import AppError, not_found, validation_error
-from app.models import Activity, AIPlanApplication, AIPlanUsage, Draft, User
-from app.schemas.ai_planning import AIPlanIn, AIPlanItemOut, AIPlanOut, BulkApplyIn
-from app.services import osm_service, planner_service
+from app.models import Activity, AIPlanApplication, AIPlanUsage, Draft, Trip, User
+from app.schemas.ai_planning import AIPlanIn, AIPlanItemOut, AIPlanOut, BulkApplyIn, StartPoint
+from app.services import osm_service, planner_service, stay_service
 from app.services.draft_service import touch
 from app.services.ownership import assert_editable, get_owned_draft, get_owned_trip
 
@@ -125,6 +126,25 @@ def _with_must_visit_places(
     return places + extra
 
 
+def _hotel_for_day(
+    db: Session, trip: Trip, data: AIPlanIn, warnings: list[str]
+) -> tuple[dict[str, Any] | None, bool]:
+    """The night's stay as start/end point (accommodation-feature.md §4)."""
+    if not data.use_stay:
+        return None, False
+    stay, return_to_it = stay_service.stay_for_day(stay_service.stays_of(db, trip), data.day_number)
+    if stay is None:
+        warnings.append("No hotel set for this night — travel from your hotel isn't included.")
+        return None, False
+    if stay.lat is None or stay.lon is None:
+        warnings.append(
+            f"Location of “{stay.name}” is unknown — pick it from hotel suggestions "
+            "to include travel."
+        )
+        return None, False
+    return {"name": stay.name, "lat": stay.lat, "lon": stay.lon}, return_to_it
+
+
 # ---------- Generate ----------
 def generate(db: Session, user: User, trip_id: str, data: AIPlanIn) -> AIPlanOut:
     trip = get_owned_trip(db, trip_id, user)
@@ -150,14 +170,34 @@ def generate(db: Session, user: User, trip_id: str, data: AIPlanIn) -> AIPlanOut
             f"We couldn't find places for “{trip.destination}” on the map, so only your "
             "must-visit places can be planned."
         )
-    plan = planner_service.plan_day(
-        places,
-        must_visit=data.must_visit,
-        avoid=data.avoid,
-        interests=data.interests,
-        priority=trip.top_priority,
-        window=window,
-        busy=busy,
+    hotel, return_to_hotel = _hotel_for_day(db, trip, data, warnings)
+    with telemetry.tracer.start_as_current_span("planner.plan_day") as span:
+        plan = planner_service.plan_day(
+            places,
+            must_visit=data.must_visit,
+            avoid=data.avoid,
+            interests=data.interests,
+            priority=trip.top_priority,
+            window=window,
+            busy=busy,
+            hotel=hotel,
+            return_to_hotel=return_to_hotel,
+        )
+        priority = trip.top_priority.value if trip.top_priority else "not_set"
+        span.set_attribute("gy.top_priority", priority)
+        span.set_attribute("gy.candidates", len(places))
+        span.set_attribute("gy.items", len(plan.items))
+        span.set_attribute("gy.has_stay", hotel is not None)
+    info = osm_service.resolve_destination(db, trip.destination) if telemetry.enabled() else None
+    attrs = telemetry.destination_attrs(info, trip.destination)
+    telemetry.PLANS_GENERATED.add(
+        1,
+        {
+            "destination_type": attrs["destination_type"],
+            "country": attrs["country"],
+            "top_priority": priority,
+            "has_stay": str(hotel is not None).lower(),
+        },
     )
     warnings.extend(plan.warnings)
     items = [
@@ -216,6 +256,7 @@ def generate(db: Session, user: User, trip_id: str, data: AIPlanIn) -> AIPlanOut
         valid_until=valid_until,
         day_number=data.day_number,
         activities=items,
+        start_point=StartPoint(**hotel) if hotel else None,
         warnings=[*warnings, TRAVEL_WARNING, DURATION_NOTE],
     )
 

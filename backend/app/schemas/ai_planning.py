@@ -22,6 +22,7 @@ class AIPlanIn(ApiModel):
     interests: Annotated[list[Interest], Field(max_length=5)] = []
     must_visit: Annotated[list[PlaceName], Field(max_length=10)] = []
     avoid: Annotated[list[PlaceName], Field(max_length=10)] = []
+    use_stay: bool = True
 
 
 class AIPlanItemOut(ApiModel):
@@ -38,11 +39,18 @@ class AIPlanItemOut(ApiModel):
     maps_url: str | None
 
 
+class StartPoint(ApiModel):
+    name: str
+    lat: float
+    lon: float
+
+
 class AIPlanOut(ApiModel):
     proposal_token: str
     valid_until: datetime
     day_number: int
     activities: list[AIPlanItemOut]
+    start_point: StartPoint | None = None
     warnings: list[str]
 
 

@@ -124,6 +124,9 @@ export default function AIPlanModal({ tripId, draftId, dayNumber, dateLabel, onA
         </form>
       ) : (
         <div className="grid gap-4">
+          {plan.startPoint && (
+            <p className="text-sm font-medium">🏨 Starts{' '}and ends at {plan.startPoint.name}</p>
+          )}
           <p className="rounded-xl bg-brand-50 px-3 py-2 text-sm">
             Suggested plan for {start}–{end}, using well-known places from Wikipedia. Durations and travel times are
             estimates — check opening hours, routes and prices with each place.

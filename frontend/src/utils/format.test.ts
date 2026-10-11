@@ -25,3 +25,11 @@ test('endTime and durationLabel', async () => {
   expect(durationLabel(45)).toBe('45 min')
   expect(durationLabel(120)).toBe('2 h')
 })
+
+test('page-view route templates never contain IDs', async () => {
+  const { routeTemplate } = await import('../components/PageViewTracker')
+  expect(routeTemplate('/trips/3f2b6a1c-1b2c-4d3e-8f90-123456789abc')).toBe('/trips/:tripId')
+  expect(routeTemplate('/trips/3f2b6a1c-1b2c-4d3e-8f90-123456789abc/compare')).toBe('/trips/:tripId/compare')
+  expect(routeTemplate('/trips/new')).toBe('/trips/new')
+  expect(routeTemplate('/account')).toBe('/account')
+})

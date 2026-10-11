@@ -30,6 +30,7 @@ os.environ["JWT_SECRET"] = "test-secret-test-secret-test-secret-123"
 os.environ["ENVIRONMENT"] = "test"
 os.environ["COOKIE_SECURE"] = "false"
 os.environ["LOG_LEVEL"] = "WARNING"
+os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = ""  # tests never export telemetry
 
 import pytest  # noqa: E402
 from alembic import command  # noqa: E402
