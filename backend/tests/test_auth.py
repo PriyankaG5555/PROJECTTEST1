@@ -1,6 +1,6 @@
 """Auth endpoints — api-contract-spec.md §5."""
 
-from datetime import date
+from datetime import UTC, date, datetime, tzinfo
 from typing import Any
 
 import pytest
@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.main import app
 from app.models import Draft, Trip, TripType, User
 from app.security import SESSION_COOKIE
+from app.services import rate_limit
 from tests.conftest import PASSWORD, signup_client
 
 AUTH = "/api/v1/auth"
@@ -128,7 +129,18 @@ def test_logout_without_session_still_succeeds(client: TestClient, db: Session) 
 
 
 # ---------- Rate limit ----------
-def test_eleventh_attempt_in_a_minute_is_rate_limited(client: TestClient, db: Session) -> None:
+def test_eleventh_attempt_in_a_minute_is_rate_limited(
+    client: TestClient, db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Freeze the clock so a slow test run can't cross a minute boundary.
+    frozen = datetime(2026, 11, 14, 9, 30, 15, tzinfo=UTC)
+
+    class FrozenDatetime(datetime):
+        @classmethod
+        def now(cls, tz: tzinfo | None = None) -> "FrozenDatetime":
+            return cls.fromtimestamp(frozen.timestamp(), tz)
+
+    monkeypatch.setattr(rate_limit, "datetime", FrozenDatetime)
     for _ in range(10):
         assert client.post(f"{AUTH}/login", json=creds()).status_code == 401
 

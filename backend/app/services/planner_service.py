@@ -76,6 +76,7 @@ SPEED_KMH = 25
 TRAVEL_BUFFER = 10
 UNKNOWN_TRAVEL = 15  # between stops when one has no map location
 SLOT = 5
+NEAR_HOTEL_KM = 15
 NEAREST_OF = 4  # after the first stop, pick the nearest of the next 4 ranked places
 
 Interval = tuple[int, int]
@@ -149,7 +150,10 @@ def plan_day(
     priority: TripPriority | None,
     window: Interval,
     busy: list[Interval],
+    hotel: dict[str, Any] | None = None,
+    return_to_hotel: bool = False,
 ) -> Plan:
+    """hotel: {name, lat, lon} — start (and, if return_to_hotel, end) point of the day."""
     avoid_low = [a.lower() for a in avoid]
     pool = [p for p in places if not any(a in p["name"].lower() for a in avoid_low)]
     wanted = interest_categories(interests)
@@ -168,6 +172,8 @@ def plan_day(
 
     def rank(p: dict[str, Any]) -> tuple[int, int, str]:
         bonus = 2 if p["category"] in wanted else 0
+        if hotel is not None and distance_km(hotel, p) <= NEAR_HOTEL_KM:
+            bonus += 1
         if priority is TripPriority.BUDGET:
             return (0 if p["free"] else 1, -(p["notability"] + bonus), p["name"])
         return (0, -(p["notability"] + bonus), p["name"])
@@ -176,7 +182,7 @@ def plan_day(
     limit = 3 if priority is TripPriority.TIME else 4
     ranked = sorted(pool, key=rank)[: limit * 2]
     taken = list(busy)
-    current, prev = window[0], None
+    current, prev = window[0], hotel
     queue: list[tuple[str, dict[str, Any] | None, bool]] = [(n, p, True) for n, p in must]
     others = [(p["name"], p, False) for p in ranked]
 
@@ -195,8 +201,9 @@ def plan_day(
         else:
             name, place, is_must = others.pop(0)
         duration = DURATIONS.get(place["category"], DEFAULT_DURATION) if place else DEFAULT_DURATION
-        travel = travel_minutes(prev, place) if plan.items else 0
-        start = earliest_slot(current + travel, duration, window, taken)
+        travel = travel_minutes(prev, place) if (plan.items or hotel is not None) else 0
+        back = travel_minutes(place, hotel) if return_to_hotel and hotel and place else 0
+        start = earliest_slot(current + travel, duration, (window[0], window[1] - back), taken)
         if start is None:
             if is_must:
                 plan.warnings.append(f"Couldn't fit “{name}” in this time window.")
@@ -210,7 +217,9 @@ def plan_day(
             parts.append("well-known place")
         if place and place["category"] in wanted:
             parts.append(f"matches “{wanted[place['category']]}”")
-        if plan.items and prev is not None and place is not None:
+        if not plan.items and hotel is not None and place is not None:
+            parts.append(f"{distance_km(hotel, place):.1f} km from your hotel")
+        elif plan.items and prev is not None and place is not None:
             parts.append(f"{distance_km(prev, place):.1f} km from the previous stop")
         plan.items.append(PlannedItem(name, start, duration, place, " · ".join(parts)))
         taken.append((start, start + duration))

@@ -48,8 +48,41 @@ export interface DraftSummary {
   updatedAt: string
 }
 
+export interface Stay {
+  id: string
+  name: string
+  checkInDay: number
+  checkOutDay: number
+  nights: number
+  costPerNight: number | null
+  totalCost: number | null
+  placeId: string | null
+  verified: boolean
+  kind: string | null
+  stars: number | null
+  lat: number | null
+  lon: number | null
+  address: string | null
+  url: string | null
+}
+
+export interface Hotel {
+  placeId: string
+  name: string
+  kind: string
+  stars: number | null
+  address: string | null
+  website: string | null
+  lat: number
+  lon: number
+  distanceKm: number | null
+  mapsUrl: string
+}
+
 export interface TripDetail extends Trip {
   drafts: DraftSummary[]
+  stays: Stay[]
+  staysTotalCost: number
 }
 
 export interface Activity {
@@ -109,6 +142,7 @@ export interface AIPlan {
   validUntil: string
   dayNumber: number
   activities: AIPlanItem[]
+  startPoint: { name: string; lat: number; lon: number } | null
   warnings: string[]
 }
 

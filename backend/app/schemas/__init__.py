@@ -17,6 +17,7 @@ __all__ = [
     "DayOut",
     "DraftOut",
     "DraftSummaryOut",
+    "StayOut",
     "TripDetailOut",
     "TripOut",
     "UserOut",
@@ -67,8 +68,36 @@ class DraftSummaryOut(ApiModel):
         return _money(v)
 
 
+class StayOut(ApiModel):
+    id: uuid.UUID
+    name: str
+    check_in_day: int
+    check_out_day: int
+    nights: int
+    cost_per_night: float | None
+    total_cost: float | None
+    place_id: str | None
+    verified: bool
+    kind: str | None
+    stars: int | None
+    lat: float | None
+    lon: float | None
+    address: str | None
+    url: str | None
+
+    @field_serializer("cost_per_night", "total_cost")
+    def _ser_money(self, v: float | None) -> float | None:
+        return None if v is None else round(float(v), 2)
+
+
 class TripDetailOut(TripOut):
     drafts: list[DraftSummaryOut]
+    stays: list[StayOut] = []
+    stays_total_cost: float = 0
+
+    @field_serializer("stays_total_cost")
+    def _ser_stays_total(self, v: float) -> float | None:
+        return _money(v)
 
 
 class ActivityOut(ApiModel):

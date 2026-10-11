@@ -120,6 +120,27 @@ Index: (`draft_id`, `day_number`, `time`) for loading a draft in display order.
 | places | JSONB | NOT NULL | Normalised places (id, name, category, lat, lon, notability, free, address, url, wiki_url) |
 | fetched_at | TIMESTAMPTZ | NOT NULL | Entries older than 7 days are refreshed |
 
+### Entity: Stay (`stays`) — accommodation by night range (accommodation-feature.md)
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| id | UUID | PK | |
+| trip_id | UUID | FK → trips.id ON DELETE CASCADE, indexed | |
+| name | VARCHAR(100) | NOT NULL | |
+| check_in_day / check_out_day | SMALLINT | NOT NULL, CHECK `check_out_day > check_in_day`, CHECK 1…31 | Nights = out − in |
+| cost_per_night | NUMERIC(12,2) | NULL, CHECK ≥ 0 | INR |
+| place_id, kind, address, url | VARCHAR | NULL | From a hotel suggestion |
+| stars | SMALLINT | NULL | |
+| lat, lon | DOUBLE PRECISION | NULL | Used by Plan my day |
+| created_at, updated_at | TIMESTAMPTZ | NOT NULL | |
+
+### Entity: DestinationCache (`destination_cache`) — destination type/country for telemetry (observability-spec.md §2.2)
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| destination_key | VARCHAR(100) | PK | Lower-case trimmed destination |
+| kind | VARCHAR(20) | NOT NULL | country/state/city/town/village/other/unknown |
+| country | VARCHAR(100) | NULL | |
+| fetched_at | TIMESTAMPTZ | NOT NULL | Refreshed after 30 days |
+
 ### Entity: AuthAttempt (`auth_attempts`) — rate limiting
 | Field | Type | Constraints | Description |
 |-------|------|-------------|-------------|
@@ -185,6 +206,9 @@ Rows older than 1 hour are deleted opportunistically on each auth request.
 | `LOG_LEVEL` | Logging level | No | `INFO` |
 | `TEST_DATABASE_URL` | Test database for `pytest` (Neon `test` branch). **Wiped on every test run**; must differ from `DATABASE_URL`. Local only. | For DB tests | — |
 | `OSM_CONTACT` | Contact (email or URL) included in the User-Agent sent to Nominatim and Wikipedia, as their usage policy asks | No | `https://ghumakkadyatri.vercel.app` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/HTTP endpoint of SigNoz (local: `http://localhost:4318`). Unset = telemetry off | No | — |
+| `OTEL_SERVICE_NAME` | Service name in traces | No | `ghumakkadyatri-api` |
+| `TELEMETRY_HASH_SALT` | Salt for hashing user IDs in telemetry (defaults to a value derived from `JWT_SECRET`) | No | derived |
 | `AI_PLAN_DAILY_LIMIT` | Maximum AI plan-generation requests per user per UTC day. | No | `10` |
 | `MIGRATION_DATABASE_URL` | Direct (non-pooled) Neon URL for Alembic; falls back to `DATABASE_URL` | No | — |
 
@@ -247,7 +271,10 @@ PROJECTTEST1/
         activity_service.py
         ai_planning_service.py
         osm_service.py     # Nominatim + Wikipedia places, cached in place_cache
-        planner_service.py # rule-based ranking and scheduling (no LLM)
+        planner_service.py # rule-based ranking and scheduling (no LLM), hotel-aware
+        stay_service.py    # stays CRUD, overlap rules
+        hotel_service.py   # Nominatim hotel suggestions
+      telemetry.py         # OpenTelemetry setup, business metrics, hashing (observability-spec.md)
         pdf_service.py
         ownership.py      # get_owned_*, assert_editable
       utils/

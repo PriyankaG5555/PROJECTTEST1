@@ -7,6 +7,7 @@ from app.models.base import Base
 from app.models.draft import Draft
 from app.models.enums import TripPriority, TripStatus, TripType
 from app.models.place_cache import PlaceCache
+from app.models.stay import DestinationCache, Stay
 from app.models.suggestion_usage import SuggestionUsage
 from app.models.trip import Trip
 from app.models.user import User
@@ -17,8 +18,10 @@ __all__ = [
     "Activity",
     "AuthAttempt",
     "Base",
+    "DestinationCache",
     "Draft",
     "PlaceCache",
+    "Stay",
     "SuggestionUsage",
     "Trip",
     "TripPriority",

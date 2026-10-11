@@ -5,6 +5,7 @@ import { useDraft, useRefreshData, useTrip } from '../api/queries'
 import AIPlanModal from '../components/AIPlanModal'
 import ActivityModal from '../components/ActivityModal'
 import DraftSwitcher from '../components/DraftSwitcher'
+import StaysPanel from '../components/StaysPanel'
 import SuggestionsPanel from '../components/SuggestionsPanel'
 import { useToast } from '../components/toast'
 import { ConfirmDialog, ErrorState, Spinner, StatusBadge, btn, card } from '../components/ui'
@@ -95,7 +96,7 @@ export default function PlannerPage() {
           </div>
         </div>
         {draft.data && t.budget !== null && (
-          <BudgetBar planned={draft.data.totalCost} budget={t.budget} topPriority={t.topPriority} />
+          <BudgetBar planned={draft.data.totalCost + t.staysTotalCost} budget={t.budget} topPriority={t.topPriority} />
         )}
         {readOnly && (
           <p className="rounded-xl bg-green-50 px-3 py-2 text-sm font-medium text-green-800">
@@ -111,6 +112,7 @@ export default function PlannerPage() {
         <div className="grid grid-cols-[repeat(auto-fill,minmax(270px,1fr))] items-start gap-4">
           {draft.data.days.map((day) => (
             <DayCard key={day.dayNumber} day={day} readOnly={readOnly} timeFirst={t.topPriority === 'time'}
+              night={t.stays.find((s) => s.checkInDay <= day.dayNumber && day.dayNumber < s.checkOutDay)?.name}
               onAdd={() => setEditing({ day: day.dayNumber })}
               onPlanAI={() => setAiDay(day)}
               onEdit={(a) => setEditing({ day: day.dayNumber, activity: a })}
@@ -124,6 +126,8 @@ export default function PlannerPage() {
           onClose={() => setAiDay(null)}
           onApplied={async (msg) => { setAiDay(null); await changed(msg) }} />
       )}
+
+      <StaysPanel trip={t} readOnly={readOnly} onChanged={changed} />
 
       <SuggestionsPanel trip={t} readOnly={readOnly}
         onAdd={(name) => setEditing({ day: 1, name, chooseDay: true })} />
@@ -187,6 +191,7 @@ function DayCard(props: {
   day: Day
   readOnly: boolean
   timeFirst: boolean
+  night?: string
   onAdd: () => void
   onPlanAI: () => void
   onEdit: (a: Activity) => void
@@ -198,6 +203,7 @@ function DayCard(props: {
     <section className={`${card} grid min-w-0`} aria-label={`Day ${day.dayNumber}`}>
       <header className="flex items-baseline justify-between gap-2 rounded-t-2xl border-b border-brand-200 bg-brand-50 px-4 py-3">
         <span className="font-display font-bold">Day {day.dayNumber}</span>
+        {props.night && <span className="text-xs text-slate-600">🏨 Night at {props.night}</span>}
         <span className="flex items-center gap-2 text-sm text-slate-600">
           {busy && (
             <span title={props.timeFirst ? 'Time is your top priority — consider moving some activities to another day.' : undefined}

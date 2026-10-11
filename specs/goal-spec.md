@@ -22,6 +22,7 @@
 - **G3 — Shareable output:** Any trip can be exported as a clean, readable PDF itinerary.
 - **G4 — Ship fast:** A working MVP (all P0 user stories) is delivered within 2 weeks by 1 developer.
 - **G5 — AI-assisted planning:** A traveller can request a time-bounded day plan using destination-aware place information, review the suggestions, and choose what to add to a draft.
+- **G6 — Observability:** The team can see logged-in usage, destinations planned (by country/state/city), chosen priorities, and response times of the API, database and external services, in a local open-source dashboard (SigNoz) — see `observability-spec.md`.
 
 ## 4. Non-Goals (Out of Scope)
 - **NG1:** Booking or payment of any kind: flights, hotels, transport, or local activities/attractions. The app plans trips; it does not book them.
@@ -51,6 +52,8 @@
 | US-9 | As a traveller, I want to export a Finalized trip's itinerary as a PDF so that I can print it, share it, or view it offline. | P0 | G3 |
 | US-9a | As a traveller, I want to reopen a Finalized trip for editing so that I can change my plan when things change, then finalize and export it again. | P0 | G1, G3 |
 | US-13 | As a traveller, I want to permanently delete my account and all my trips so that my personal data is not kept when I stop using the app. | P0 | G2 |
+| US-14 | As a traveller, I want to add where I stay each night (hotel and check-in/check-out days), with free hotel suggestions, so that my plan and budget include accommodation and Plan my day starts and ends at my hotel. | P1 | G1, G5 |
+| US-15 | As the app's architect, I want traces, metrics and a dashboard of usage, destinations, priorities and response times so that I can understand usage and spot slow or failing dependencies. | P1 | G6 |
 | US-10 | As a traveller, I want to edit a trip's details (destination, dates, type) so that I can fix mistakes or adjust plans. | P1 | G1 |
 | US-11 | As a traveller, I want to delete a trip I no longer need so that my trip list stays clean. | P1 | G1 |
 | US-12 | As a traveller on my phone, I want the app to work well on a mobile browser so that I can check my plan while travelling. | P1 | G2 |
@@ -78,6 +81,8 @@
   *(US-7a, US-7b)* — The previous per-activity High/Medium/Low label is **removed**.
 - [ ] **F11 — Activity suggestions (P1):** In the planner, the user taps **Get suggestions** to see up to 10 places to visit near the trip's destination from **Wikipedia, located with OpenStreetMap** (free, no API key), ordered according to the trip's top priority, each with name, category, "Free" when known, and a map link. **Add to plan** opens the Add activity form pre-filled with the place name for a chosen day. Results show "Places: Wikipedia (CC BY-SA) · Location: © OpenStreetMap contributors". If the map service is unavailable, a friendly message is shown and the rest of the app works normally. *(US-7c)*
 - [ ] **F12 — AI-assisted day planning (P1):** For a selected trip day, the traveller sets a start and end time and may provide interests, must-visit places, and places to avoid. The app proposes a time-ordered itinerary with visit durations, using configured LLM and/or destination-place API providers. The traveller reviews and selectively adds suggestions to a draft; generation never changes a draft by itself. See [`ai-feature.md`](ai-feature.md) for provider, privacy, scheduling, and acceptance requirements. *(US-7d)*
+- [ ] **F13 — Stays & hotel suggestions (P1):** Stays by night range on the trip; hotel/guest-house/hostel suggestions from OpenStreetMap (Nominatim, free); stays included in budget and PDF; Plan my day starts/ends at the night's hotel. *(US-14; see `accommodation-feature.md`)*
+- [ ] **F14 — Observability (P1):** OpenTelemetry traces and metrics to a local SigNoz: logged-in users, page views, trips by destination type/country/priority, plan usage, API/DB/external latency; dashboard definitions. Off unless configured. *(US-15; see `observability-spec.md`)*
 - [ ] **F9 — Multiple drafts (P1):** A trip can have several named draft versions of its plan. The user can create a new draft (blank or copied from an existing one), rename, and delete drafts. Finalizing one draft makes it the trip's Finalized plan; Reopen for editing returns it to Draft. *(US-8a)*
 - [ ] **F10 — Compare drafts (P2):** The user selects two drafts and sees them side by side: activities per day and total cost per day and per trip. *(US-8b)*
 

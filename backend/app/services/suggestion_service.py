@@ -10,6 +10,7 @@ from sqlalchemy import literal
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
+from app import telemetry
 from app.db import get_engine
 from app.errors import AppError
 from app.models import SuggestionUsage, Trip, TripPriority, User
@@ -73,4 +74,6 @@ def suggestions_for(db: Session, user: User, trip_id: str) -> tuple[Trip, list[d
         places = osm_service.places_for(db, trip.destination)
     except osm_service.OSMUnavailable:
         raise unavailable() from None
+    info = osm_service.resolve_destination(db, trip.destination) if telemetry.enabled() else None
+    telemetry.SUGGESTIONS.add(1, telemetry.destination_attrs(info, trip.destination))
     return trip, [to_suggestion(p) for p in order(places, trip.top_priority)[:MAX_RESULTS]]

@@ -17,8 +17,9 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
+from app import telemetry
 from app.config import get_settings
-from app.models import PlaceCache
+from app.models import DestinationCache, PlaceCache
 
 logger = logging.getLogger("app.places")
 
@@ -157,16 +158,89 @@ def _user_agent() -> str:
     return f"GhumakkadYatri/1.0 (+{get_settings().osm_contact})"
 
 
-def _get_json(url: str, params: dict[str, Any]) -> Any:
+def _get_json(url: str, params: dict[str, Any], timeout: float = TIMEOUT_SECONDS) -> Any:
     request = urllib.request.Request(
         f"{url}?{urllib.parse.urlencode(params)}", headers={"User-Agent": _user_agent()}
     )
+    service = "nominatim" if "nominatim" in url else "wikipedia"
     try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:  # noqa: S310
+        with (
+            telemetry.external_call(service),
+            urllib.request.urlopen(  # noqa: S310
+                request, timeout=timeout
+            ) as response,
+        ):
             return json.load(response)
     except (OSError, ValueError) as exc:  # URLError, HTTP errors, timeouts, bad JSON
         logger.warning("place data request failed", extra={"error": type(exc).__name__})
         raise OSMUnavailable from exc
+
+
+def nominatim_search(
+    query: str, limit: int = 1, extratags: bool = False, viewbox: str | None = None
+) -> list[dict[str, Any]]:
+    """Nominatim search; with viewbox ("west,north,east,south") results stay inside that area."""
+    params: dict[str, Any] = {"q": query, "format": "jsonv2", "limit": limit}
+    if extratags:
+        params["extratags"] = 1
+    if viewbox:
+        params.update(viewbox=viewbox, bounded=1)
+    result: list[dict[str, Any]] = _get_json(NOMINATIM_URL, params)
+    return result
+
+
+# Nominatim addresstype -> destination type for telemetry (observability-spec.md §2.2).
+DESTINATION_KINDS = {
+    "country": "country",
+    "state": "state",
+    "province": "state",
+    "region": "state",
+    "state_district": "state",
+    "city": "city",
+    "municipality": "city",
+    "town": "town",
+    "village": "village",
+    "hamlet": "village",
+    "suburb": "village",
+}
+
+
+def resolve_destination(db: Session, destination: str) -> dict[str, Any]:
+    """Destination type and country, cached 30 days. Never raises; 'unknown' on failure."""
+    key = destination.strip().lower()[:100]
+    row = db.scalar(
+        select(DestinationCache).where(
+            DestinationCache.destination_key == key,
+            DestinationCache.fetched_at > func.now() - timedelta(days=30),
+        )
+    )
+    if row is not None:
+        return {"kind": row.kind, "country": row.country}
+    info: dict[str, Any] = {"kind": "unknown", "country": None}
+    try:
+        found = _get_json(
+            NOMINATIM_URL,
+            {"q": destination, "format": "jsonv2", "limit": 1, "addressdetails": 1},
+            timeout=3,
+        )
+        if found:
+            info = {
+                "kind": DESTINATION_KINDS.get(found[0].get("addresstype", ""), "other"),
+                "country": (found[0].get("address") or {}).get("country"),
+            }
+    except OSMUnavailable:
+        return info  # not cached, so it is retried next time
+    db.execute(
+        insert(DestinationCache)
+        .values(
+            destination_key=key, kind=info["kind"], country=info["country"], fetched_at=func.now()
+        )
+        .on_conflict_do_update(
+            index_elements=[DestinationCache.destination_key],
+            set_={"kind": info["kind"], "country": info["country"], "fetched_at": func.now()},
+        )
+    )
+    return info
 
 
 def search_points(bbox: list[float]) -> list[tuple[float, float]]:
@@ -305,9 +379,15 @@ def places_for(db: Session, destination: str) -> list[dict[str, Any]]:
             PlaceCache.fetched_at > func.now() - timedelta(days=CACHE_DAYS),
         )
     )
-    if cached is not None:
-        return list(cached)
-    places = fetch_places(destination)
+    span = telemetry.tracer.start_span("places.fetch")
+    span.set_attribute("gy.cache_hit", cached is not None)
+    try:
+        if cached is not None:
+            return list(cached)
+        places = fetch_places(destination)
+        span.set_attribute("gy.results", len(places))
+    finally:
+        span.end()
     db.execute(
         insert(PlaceCache)
         .values(destination_key=key, places=places, fetched_at=func.now())

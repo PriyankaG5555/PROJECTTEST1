@@ -19,6 +19,7 @@ from app.models.enums import (
 
 if TYPE_CHECKING:
     from app.models.draft import Draft
+    from app.models.stay import Stay
     from app.models.user import User
 
 
@@ -55,6 +56,9 @@ class Trip(UUIDPrimaryKey, Timestamps, Base):
         passive_deletes=True,
         foreign_keys="Draft.trip_id",
         order_by="Draft.created_at",
+    )
+    stays: Mapped[list["Stay"]] = relationship(
+        back_populates="trip", cascade="all, delete-orphan", passive_deletes=True
     )
 
     @property

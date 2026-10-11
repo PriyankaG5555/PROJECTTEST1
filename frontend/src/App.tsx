@@ -1,5 +1,6 @@
 import { Link, Navigate, Route, Routes } from 'react-router'
 import { AppLayout, GuestOnly, RequireAuth } from './components/AppLayout'
+import PageViewTracker from './components/PageViewTracker'
 import { btn } from './components/ui'
 import AccountPage from './pages/AccountPage'
 import AuthPage from './pages/AuthPage'
@@ -11,6 +12,8 @@ import TripsPage from './pages/TripsPage'
 // Routes — frontend-spec.md §2
 export default function App() {
   return (
+    <>
+    <PageViewTracker />
     <Routes>
       <Route path="/" element={<Navigate to="/trips" replace />} />
       <Route path="/login" element={<GuestOnly><AuthPage mode="login" /></GuestOnly>} />
@@ -25,6 +28,7 @@ export default function App() {
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>
+    </>
   )
 }
 

@@ -56,6 +56,7 @@ function TripForm({ trip }: { trip?: TripDetail }) {
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [formError, setFormError] = useState<string>()
   const [affected, setAffected] = useState<AffectedActivity[] | null>(null)
+  const [affectedStays, setAffectedStays] = useState<{ stayId: string; name: string; checkInDay: number }[]>([])
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [busy, setBusy] = useState(false)
   const navigate = useNavigate()
@@ -95,7 +96,10 @@ function TripForm({ trip }: { trip?: TripDetail }) {
       }
     } catch (err) {
       if (err instanceof ApiError && err.code === 'ACTIVITIES_WOULD_BE_DELETED')
+{
         setAffected((err.details?.affected as AffectedActivity[]) ?? [])
+        setAffectedStays((err.details?.affectedStays as typeof affectedStays) ?? [])
+      }
       else if (err instanceof ApiError && Object.keys(err.fields).length) setErrors(err.fields)
       else setFormError(err instanceof Error ? err.message : 'Something went wrong.')
     } finally {
@@ -185,6 +189,9 @@ function TripForm({ trip }: { trip?: TripDetail }) {
                 </li>
               ))}
             </ul>
+            {affectedStays.length > 0 && (
+              <p>Stays removed: {affectedStays.map((x) => `${x.name} (from day ${x.checkInDay})`).join(', ')}. Longer stays are shortened.</p>
+            )}
           </div>
         )}
         <FormError message={formError} />
